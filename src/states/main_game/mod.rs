@@ -12,6 +12,7 @@ mod enemies;
 mod player;
 
 use player::*;
+use enemies::tester::Tester;
 
 pub struct StateData {
     player_ship_texture : Texture2d,
@@ -22,6 +23,7 @@ pub struct StateData {
     player_bullet_texture : Texture2d,
 
     player : Player,
+    enemy : Tester,
 }
 
 impl StateData {
@@ -38,6 +40,8 @@ impl StateData {
             GameState::MainMenu(dat) => {
                 GameState::MainGame(
                     StateData {
+                        enemy : Tester::new(),
+
                         player : Player::new(),
                         player_ship_texture,
                         sun_texture,
@@ -51,6 +55,8 @@ impl StateData {
             _ => {
                 GameState::MainGame(
                     StateData {
+                        enemy : Tester::new(),
+
                         player : Player::new(),
                         player_ship_texture,
                         sun_texture,
@@ -97,6 +103,7 @@ impl StateData {
 
         let player_ang = vec2(0.0f32, 1.0f32).angle(input_tracker.mouse_position());
         self.player.update(input_tracker.is_key_down(VirtualKeyCode::Space), player_ang);
+        self.enemy.update(&self.player);
         
         ctx.camera.disp = (-self.player.pos.to_vec()).extend(0.0f32);
 
@@ -134,6 +141,7 @@ impl StateData {
         draw_sprite(ctx, &mut frame, Matrix4::one(), &self.background_texture, (1.0f32, 1.0f32), Some(ctx.viewport()));
         draw_sprite(ctx, &mut frame, vp, &self.sun_texture, (0.4f32, 0.4f32), Some(ctx.viewport()));
         draw_sprite(ctx, &mut frame, vp * self.player.model_mat(), &self.player_ship_texture, (0.1f32, 0.1f32), Some(ctx.viewport()));
+        draw_sprite(ctx, &mut frame, vp * self.enemy.model_mat(), &self.basic_enemy_ship_texture, (0.1f32, 0.1f32), Some(ctx.viewport()));
 
         // Orphaning technique
         // https://stackoverflow.com/questions/43036568/when-should-glinvalidatebufferdata-be-used

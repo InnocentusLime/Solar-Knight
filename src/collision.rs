@@ -23,6 +23,9 @@ pub fn mesh_of_sprite(model_mat : Matrix4<f32>, size : Vector2<f32>) -> [Point2<
     .map(|v| Point2 { x : v.x, y : v.y })
     .enumerate()
     .for_each(|(i, x)| output[i] = x);
+
+    //println!("{:?}", output);
+
     output
 }
 
@@ -126,14 +129,15 @@ impl AxisAlignedBoundingBox {
 }
 
 pub fn mesh_collision(a : &[Point2<f32>], b : &[Point2<f32>]) -> bool {
+    // we use separating axis theorem here to check for collisions
+    // https://en.wikipedia.org/wiki/Hyperplane_separation_theorem
     use std::iter::once;
     use std::borrow::Borrow;
 
     assert!(a.len() > 0);
-    let last_a = a.len() - 1;
     assert!(b.len() > 0);
-    let last_b = b.len() - 1;
 
+    // iterators over sides of the meshes
     let a_sides = 
         a.windows(2).map(|p| (p[0], p[1]))
         .chain(once(
@@ -147,6 +151,7 @@ pub fn mesh_collision(a : &[Point2<f32>], b : &[Point2<f32>]) -> bool {
         ))
     ;
 
+    // iterator over all possible axis
     let mut axis = 
         a_sides.chain(b_sides)
         .map(
@@ -157,8 +162,15 @@ pub fn mesh_collision(a : &[Point2<f32>], b : &[Point2<f32>]) -> bool {
         )
     ;
 
-    axis.any(
+    // The aglrithm below checks for LACK of collisions (returns `true` when there's 
+    // no collision and return `false` when there's a collision), so we
+    // invert the result so the algorithm becomes an algrothm
+    // whichs cheks for the PRESENCE of collisions (return `true` on collision and `false`
+    // when there's no collision)
+    !axis.any(
         |perp| {
+            // projecting all points in search of the segment
+            // which will represent the shape A
             let (a_min_proj, a_max_proj) =
                 a.iter()
                 .fold(
@@ -170,6 +182,8 @@ pub fn mesh_collision(a : &[Point2<f32>], b : &[Point2<f32>]) -> bool {
                 )
             ;
 
+            // projecting all points in search of the segment
+            // which will represent the shape B
             let (b_min_proj, b_max_proj) =
                 b.iter()
                 .fold(
@@ -180,8 +194,11 @@ pub fn mesh_collision(a : &[Point2<f32>], b : &[Point2<f32>]) -> bool {
                     }
                 )
             ;
-
-            !(a_max_proj < b_min_proj || b_max_proj < a_min_proj)
+    
+            // check if we managed to split them
+            // if we managed to split them, there was
+            // no collision
+            a_max_proj < b_min_proj || b_max_proj < a_min_proj
         }
     )
 }

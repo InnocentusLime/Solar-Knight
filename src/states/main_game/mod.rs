@@ -85,7 +85,7 @@ impl StateData {
                 ),
                 ..
             } => {
-                //self.player.shoot();
+                self.player.shoot();
             },
             _ => (),
         }
@@ -104,12 +104,13 @@ impl StateData {
         let player_ang = vec2(0.0f32, 1.0f32).angle(input_tracker.mouse_position());
         self.player.update(input_tracker.is_key_down(VirtualKeyCode::Space), player_ang);
         self.enemy.update(&self.player);
+        self.player.update_bullets(&mut self.enemy);
         
         ctx.camera.disp = (-self.player.pos.to_vec()).extend(0.0f32);
 
          
         if input_tracker.is_key_down(VirtualKeyCode::Q) {
-                self.player.shoot();
+                //self.player.shoot();
         }
         
 

@@ -31,7 +31,7 @@ impl Tester {
             self.pos += vec2(-s, c) * TESTER_STEP_LENGTH;
         } else {
             // we turn into a spiny boi on death
-            self.ang += Rad(std::f32::consts::TAU / (360.0f32 * 2.0f32));
+            self.ang += Rad(std::f32::consts::TAU / 360.0f32 * 4.0f32);
         }
     }
 

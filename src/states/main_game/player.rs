@@ -1,6 +1,7 @@
 use glium::VertexBuffer;
 use cgmath::{ EuclideanSpace, Matrix4, Angle, Rad, Point2, vec2 };
 
+use super::enemies::tester::Tester;
 use crate::graphics_init::ENEMY_BULLET_LIMIT;
 use crate::basic_graphics_data::SpriteData;
 use crate::containers::MemoryChunk;
@@ -24,12 +25,23 @@ impl TestBullet {
         }
     }
 
-    pub fn update(&mut self) {
-        if self.lifetime == 0 { panic!("You tried to update a dead bullet, dude") }
+    pub fn update(&mut self, enemy : &mut Tester) {
+        use crate::collision::*;
+
+        assert!(self.lifetime > 0);
 
         let (s, c) = (self.ang + Rad(std::f32::consts::FRAC_PI_2)).sin_cos();
         self.pos += vec2(c, s) * PLAYER_BULLET_STEP_LENGTH;
         self.lifetime -= 1;
+
+        let my_mesh = mesh_of_sprite(self.model_mat(), vec2(0.06f32, 0.09f32));
+        let enemy_mesh = mesh_of_sprite(enemy.model_mat(), vec2(0.1f32, 0.1f32));
+        
+        if mesh_collision(&my_mesh, &enemy_mesh) && enemy.hp > 0 {
+            enemy.hp -= 1;
+            println!("OUCH. Hp left {}", enemy.hp);
+            self.lifetime = 0;
+        } 
     }
 
     #[inline]
@@ -64,10 +76,12 @@ impl Player {
         if movement {
             let (s, c) = self.ang.sin_cos();
             self.pos += 0.01f32 * vec2(-s, c); 
-        }
-        
+        }    
+    }
+
+    pub fn update_bullets(&mut self, enemy : &mut Tester) {
         self.bullets.iter_mut()
-        .for_each(|x| x.update());
+        .for_each(|x| x.update(enemy));
 
         self.bullets.retain(|x| x.lifetime > 0);
     }

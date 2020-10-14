@@ -1,4 +1,4 @@
-use cgmath::{ EuclideanSpace, Rad, Matrix4, Point2, Vector2, Vector4, vec2, vec4, dot };
+use cgmath::{ EuclideanSpace, InnerSpace, Rad, Matrix4, Point2, Vector2, Vector4, vec2, vec4, dot };
 
 use crate::basic_graphics_data::QUAD_VERTEX_DATA;
 
@@ -204,17 +204,28 @@ pub fn mesh_collision(a : &[Point2<f32>], b : &[Point2<f32>]) -> bool {
 }
 
 #[inline]
-fn point_line_distance(p : Point2<f32>, line_p_1 : Point2<f32>, line_p_2 : Point2<f32>) -> f32 {
-    let v = line_p_1 - line_p_2;
-    let a = p.x - v.y;
-    let b = p.y + v.x;
-    f32::hypot(a, b)
+fn point_line_segment_distance(p : Point2<f32>, line_p_1 : Point2<f32>, line_p_2 : Point2<f32>) -> f32 {
+    if dot(p - line_p_1, line_p_2 - line_p_1) < 0.0f32 {
+        (p - line_p_1).magnitude()
+    } else if dot(p - line_p_2, line_p_1 - line_p_2) < 0.0f32 {
+        (p - line_p_2).magnitude()
+    } else {
+        let line_vec = line_p_2 - line_p_1;
+
+        assert!(line_vec.x != 0.0f32); assert!(line_vec.y != 0.0f32);
+
+        let h = vec2(-line_vec.y, line_vec.x);
+        let c = -dot(h, line_p_1.to_vec());
+        (dot(h, p.to_vec()) + c) / h.magnitude()
+    }
 }
 
 #[inline]
 pub fn mesh_circle_collision(mesh : &[Point2<f32>], center : Point2<f32>, r : f32) -> bool {
     use std::iter::once;
     use std::borrow::Borrow;
+
+    assert!(mesh.len() > 0);
 
     let mut sides = 
         mesh.windows(2).map(|p| (p[0], p[1]))
@@ -223,7 +234,7 @@ pub fn mesh_circle_collision(mesh : &[Point2<f32>], center : Point2<f32>, r : f3
         ))
     ;
 
-    sides.any(|(a, b)| point_line_distance(a, b, center) <= r)
+    sides.any(|(a, b)| point_line_segment_distance(center, a, b) <= r)
 }
 
 #[inline]

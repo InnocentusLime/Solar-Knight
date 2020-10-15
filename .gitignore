@@ -1,3 +1,5 @@
 /target
 err.log
 Cargo.lock
+.*.swp
+.*.swo

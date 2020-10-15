@@ -6,7 +6,6 @@ use super::{ GameState, TransitionRequest };
 use crate::graphics_init::{ RenderTargets, GraphicsContext };
 use crate::input_tracker::InputTracker;
 use crate::loaders::texture_load_from_file;
-use crate::containers::ConsistentLinearChunk;
 
 mod enemies;
 mod player;
@@ -85,7 +84,7 @@ impl StateData {
                 ),
                 ..
             } => {
-                self.player.shoot();
+                //self.player.shoot();
             },
             _ => (),
         }
@@ -110,7 +109,7 @@ impl StateData {
 
          
         if input_tracker.is_key_down(VirtualKeyCode::Q) {
-                //self.player.shoot();
+                self.player.shoot();
         }
         
 

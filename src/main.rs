@@ -7,6 +7,7 @@ mod graphics_utils;
 mod input_tracker;
 mod collision;
 mod containers;
+mod collision_models;
 
 use std::fs::File;
 use std::time::{ Duration, Instant };

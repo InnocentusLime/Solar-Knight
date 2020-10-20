@@ -35,6 +35,8 @@ pub struct SpriteData {
     pub mat_col2 : [f32; 4],
     pub mat_col3 : [f32; 4],
     pub mat_col4 : [f32; 4],
+    pub texture_bottom_left : [f32; 2],
+    pub texture_top_right : [f32; 2],
 }
 
 pub const ZEROED_SPRITE_DATA : SpriteData =
@@ -43,7 +45,9 @@ pub const ZEROED_SPRITE_DATA : SpriteData =
         mat_col2 : [0.0f32, 0.0f32, 0.0f32, 0.0f32],
         mat_col3 : [0.0f32, 0.0f32, 0.0f32, 0.0f32],
         mat_col4 : [0.0f32, 0.0f32, 0.0f32, 0.0f32],
+        texture_bottom_left : [0.0f32, 0.0f32],
+        texture_top_right : [1.0f32, 1.0f32],
     }
 ;
 
-implement_vertex!(SpriteData, mat_col1, mat_col2, mat_col3, mat_col4);
+implement_vertex!(SpriteData, mat_col1, mat_col2, mat_col3, mat_col4, texture_bottom_left, texture_top_right);

@@ -1,10 +1,15 @@
 use glium::VertexBuffer;
-use cgmath::{ EuclideanSpace, Matrix4, Angle, Rad, Point2, vec2 };
+use cgmath::{ EuclideanSpace, Matrix4, Angle, Rad, Point2, Vector2, Decomposed, Rotation2, Basis2, vec2 };
 
-use super::enemies::tester::Tester;
+use super::enemies::{ Hive, Enemy };
 use crate::graphics_init::ENEMY_BULLET_LIMIT;
 use crate::basic_graphics_data::SpriteData;
 use crate::containers::MemoryChunk;
+use crate::collision_models;
+use crate::collision::Collision;
+
+const PLAYER_SIZE : (f32, f32) = (0.1f32, 0.1f32);
+const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
 
 /// Ship's speed is `1/(10 - x)`. Where `x` is a value which increases when `space` is down
 /// Right now `x` is capped at `8.0f32`
@@ -25,7 +30,7 @@ impl TestBullet {
         }
     }
 
-    pub fn update(&mut self, enemy : &mut Tester) {
+    pub fn update(&mut self, hive : &mut Hive) {
         use crate::collision::*;
 
         assert!(self.lifetime > 0);
@@ -34,19 +39,32 @@ impl TestBullet {
         self.pos += vec2(c, s) * PLAYER_BULLET_STEP_LENGTH;
         self.lifetime -= 1;
 
-        let my_mesh = mesh_of_sprite(self.model_mat(), vec2(0.06f32, 0.09f32));
-        let enemy_mesh = mesh_of_sprite(enemy.model_mat(), vec2(0.1f32, 0.1f32));
+        let my_mesh = collision_models::consts::BulletTester.apply_transform(&self.transform());
+
+        for enemy in hive.enemies.iter_mut() {
+            if self.lifetime == 0 { break }
+
+            let enemy_body = enemy.phys_body();
         
-        if mesh_collision(&my_mesh, &enemy_mesh) && enemy.hp > 0 {
-            enemy.hp -= 1;
-            println!("OUCH. Hp left {}", enemy.hp);
-            self.lifetime = 0;
-        } 
+            if enemy_body.check(&my_mesh) && *enemy.hp() > 0 {
+                *enemy.hp_mut() -= 1;
+                self.lifetime = 0;
+            } 
+        }
+    }
+
+    #[inline]
+    pub fn transform(&self) -> Decomposed<Vector2<f32>, Basis2<f32>> {
+        Decomposed {
+            scale : 1.0f32,
+            rot : <Basis2<f32> as Rotation2<f32>>::from_angle(self.ang),
+            disp : self.pos.to_vec(),
+        }
     }
 
     #[inline]
     pub fn model_mat(&self) -> Matrix4<f32> {
-        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * Matrix4::from_angle_z(self.ang)
+        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * Matrix4::from_angle_z(self.ang) * Matrix4::from_nonuniform_scale(TESTER_BULLET_SIZE.0, TESTER_BULLET_SIZE.1, 1.0f32)
     }
 }
 
@@ -67,7 +85,7 @@ impl Player {
 
     #[inline]
     pub fn model_mat(&self) -> Matrix4<f32> {
-        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * Matrix4::from_angle_z(self.ang)
+        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * Matrix4::from_angle_z(self.ang) * Matrix4::from_nonuniform_scale(PLAYER_SIZE.0, PLAYER_SIZE.1, 1.0f32)
     }
 
     pub fn update(&mut self, movement : bool, ang : Rad<f32>) {
@@ -79,9 +97,9 @@ impl Player {
         }    
     }
 
-    pub fn update_bullets(&mut self, enemy : &mut Tester) {
+    pub fn update_bullets(&mut self, hive : &mut Hive) {
         self.bullets.iter_mut()
-        .for_each(|x| x.update(enemy));
+        .for_each(|x| x.update(hive));
 
         self.bullets.retain(|x| x.lifetime > 0);
     }
@@ -91,14 +109,14 @@ impl Player {
     }
 
     pub fn fill_bullet_buffer(&self, buff : &mut VertexBuffer<SpriteData>) {
-        let mut bullet_ptr = buff.map_write();
+        let mut ptr = buff.map_write();
 
-        if bullet_ptr.len() < ENEMY_BULLET_LIMIT { panic!("Buffer too small"); }
+        if ptr.len() < ENEMY_BULLET_LIMIT { panic!("Buffer too small"); }
 
-        for i in 0..bullet_ptr.len() { 
+        for i in 0..ptr.len() { 
             use crate::basic_graphics_data::ZEROED_SPRITE_DATA;
             
-            bullet_ptr.set(i, ZEROED_SPRITE_DATA);
+            ptr.set(i, ZEROED_SPRITE_DATA);
         }
 
         self.bullets.iter()
@@ -112,10 +130,12 @@ impl Player {
                     mat_col2 : m.y.into(),
                     mat_col3 : m.z.into(),
                     mat_col4 : m.w.into(),
+                    texture_bottom_left : [0.0f32, 0.0f32],
+                    texture_top_right : [1.0f32, 1.0f32],
                 }
             ;
             
-            bullet_ptr.set(i, dat);
+            ptr.set(i, dat);
         });
     }
 }

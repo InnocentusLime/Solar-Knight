@@ -23,8 +23,9 @@ pub const SCREEN_WIDTH : f32 = ASPECT_RATIO * SCALING;
 pub const SCREEN_RIGHT : f32 = SCREEN_WIDTH;
 pub const SCREEN_LEFT : f32 = -SCREEN_RIGHT;
 
-pub const ENEMY_BULLET_LIMIT : usize = 10 * 1000;
-pub const PLAYER_BULLET_LIMIT : usize = 100;
+pub const ENEMY_BULLET_LIMIT : usize = 10_000;
+pub const ENEMY_LIMIT : usize = 1000;
+pub const PLAYER_BULLET_LIMIT : usize = ENEMY_BULLET_LIMIT;
 
 pub struct RenderTargets {
     pub framebuffer1 : Texture2d,
@@ -41,6 +42,7 @@ pub struct GraphicsContext {
     pub blur_shader : Program,
     pub instanced_sprite_shader : Program,
     pub player_bullet_buffer : VertexBuffer<SpriteData>, 
+    pub enemy_buffer : VertexBuffer<SpriteData>, 
 }
 
 impl GraphicsContext {
@@ -157,12 +159,17 @@ impl GraphicsContext {
             )
         ;
 
-        let zeroed_player_bullet_buffer = [ZEROED_SPRITE_DATA; ENEMY_BULLET_LIMIT];
-
         let player_bullet_buffer =
             verbose_try!(
-                VertexBuffer::dynamic(&display, &zeroed_player_bullet_buffer),
+                VertexBuffer::dynamic(&display, &[ZEROED_SPRITE_DATA; PLAYER_BULLET_LIMIT]),
                 player_bullet_buffer
+            )
+        ;
+        
+        let enemy_buffer =
+            verbose_try!(
+                VertexBuffer::dynamic(&display, &[ZEROED_SPRITE_DATA; ENEMY_LIMIT]),
+                enemy_buffer
             )
         ;
         
@@ -177,6 +184,7 @@ impl GraphicsContext {
                     blur_shader,
                     instanced_sprite_shader,
                     player_bullet_buffer,
+                    enemy_buffer,
                 },
                 event_loop,
                 RenderTargets {

@@ -3,6 +3,8 @@ pub struct MemoryChunk<T>(Vec<T>);
 impl<T> MemoryChunk<T> {
     pub fn new() -> Self { MemoryChunk(Vec::new()) }
 
+    pub fn len(&self) -> usize { self.0.len() }
+
     pub fn with_capacity(cap : usize) -> Self { MemoryChunk(Vec::with_capacity(cap)) }
 
     pub fn push(&mut self, x : T) { self.0.push(x) }

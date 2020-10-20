@@ -3,7 +3,7 @@ use glium::texture::texture2d::Texture2d;
 use glutin::event::VirtualKeyCode;
 
 use super::{ GameState, TransitionRequest };
-use crate::graphics_init::{ RenderTargets, GraphicsContext };
+use crate::graphics_init::{ RenderTargets, GraphicsContext, ENEMY_LIMIT };
 use crate::input_tracker::InputTracker;
 use crate::loaders::texture_load_from_file;
 
@@ -11,7 +11,9 @@ mod enemies;
 mod player;
 
 use player::*;
-use enemies::tester::Tester;
+use enemies::{ Hive, Enemy, tester::Tester };
+
+const SPAWN_RATE : u64 = 180;
 
 pub struct StateData {
     player_ship_texture : Texture2d,
@@ -22,7 +24,9 @@ pub struct StateData {
     player_bullet_texture : Texture2d,
 
     player : Player,
-    enemy : Tester,
+    hive : Hive,
+
+    timer : u64,
 }
 
 impl StateData {
@@ -39,7 +43,7 @@ impl StateData {
             GameState::MainMenu(dat) => {
                 GameState::MainGame(
                     StateData {
-                        enemy : Tester::new(),
+                        hive : Hive::new(),
 
                         player : Player::new(),
                         player_ship_texture,
@@ -48,13 +52,15 @@ impl StateData {
                         earth_texture,
                         basic_enemy_ship_texture,
                         player_bullet_texture,
+
+                        timer : 0,
                     }
                 )
             },
             _ => {
                 GameState::MainGame(
                     StateData {
-                        enemy : Tester::new(),
+                        hive : Hive::new(),
 
                         player : Player::new(),
                         player_ship_texture,
@@ -63,6 +69,8 @@ impl StateData {
                         earth_texture,
                         basic_enemy_ship_texture,
                         player_bullet_texture,
+
+                        timer : 0,
                     }
                 )
             },
@@ -84,7 +92,7 @@ impl StateData {
                 ),
                 ..
             } => {
-                //self.player.shoot();
+                self.player.shoot();
             },
             _ => (),
         }
@@ -100,16 +108,23 @@ impl StateData {
 
         use crate::collision::*;
 
+        if self.timer >= SPAWN_RATE {
+            self.timer = 0;
+            self.hive.spawn(Enemy::Tester(Tester::new()));
+        } else if self.hive.alive_count() < ENEMY_LIMIT { 
+            self.timer += 1;
+        }
+
         let player_ang = vec2(0.0f32, 1.0f32).angle(input_tracker.mouse_position());
         self.player.update(input_tracker.is_key_down(VirtualKeyCode::Space), player_ang);
-        self.enemy.update(&self.player);
-        self.player.update_bullets(&mut self.enemy);
+        self.hive.update(&self.player);
+        self.player.update_bullets(&mut self.hive);
         
         ctx.camera.disp = (-self.player.pos.to_vec()).extend(0.0f32);
 
          
         if input_tracker.is_key_down(VirtualKeyCode::Q) {
-                self.player.shoot();
+                //self.player.shoot();
         }
         
 
@@ -138,10 +153,9 @@ impl StateData {
 
         let vp = ctx.build_projection_view_matrix();
 
-        draw_sprite(ctx, &mut frame, Matrix4::one(), &self.background_texture, (1.0f32, 1.0f32), Some(ctx.viewport()));
-        draw_sprite(ctx, &mut frame, vp, &self.sun_texture, (0.4f32, 0.4f32), Some(ctx.viewport()));
-        draw_sprite(ctx, &mut frame, vp * self.player.model_mat(), &self.player_ship_texture, (0.1f32, 0.1f32), Some(ctx.viewport()));
-        draw_sprite(ctx, &mut frame, vp * self.enemy.model_mat(), &self.basic_enemy_ship_texture, (0.1f32, 0.1f32), Some(ctx.viewport()));
+        draw_sprite(ctx, &mut frame, Matrix4::one(), &self.background_texture, Some(ctx.viewport()));
+        draw_sprite(ctx, &mut frame, vp * Matrix4::from_nonuniform_scale(0.4f32, 0.4f32, 1.0f32), &self.sun_texture, Some(ctx.viewport()));
+        draw_sprite(ctx, &mut frame, vp * self.player.model_mat(), &self.player_ship_texture, Some(ctx.viewport()));
 
         // Orphaning technique
         // https://stackoverflow.com/questions/43036568/when-should-glinvalidatebufferdata-be-used
@@ -149,7 +163,20 @@ impl StateData {
         // https://community.khronos.org/t/vbos-strangely-slow/60109
         ctx.player_bullet_buffer.invalidate();
         self.player.fill_bullet_buffer(&mut ctx.player_bullet_buffer);
-        draw_instanced_sprite(ctx, &mut frame, &ctx.player_bullet_buffer, vp, &self.player_bullet_texture, (0.06f32, 0.09f32), Some(ctx.viewport()));
+        draw_instanced_sprite(ctx, &mut frame, &ctx.player_bullet_buffer, vp, &self.player_bullet_texture, Some(ctx.viewport()));
+
+        ctx.enemy_buffer.invalidate();
+        self.hive.fill_enemy_buffer(&mut ctx.enemy_buffer);
+        draw_instanced_sprite(ctx, &mut frame, &ctx.enemy_buffer, vp, &self.basic_enemy_ship_texture, Some(ctx.viewport()));
+
+/*
+        for enemy in self.hive.enemies.iter() {
+            match enemy {
+                Enemy::Brute(_) => (),
+                Enemy::Tester(enemy) => draw_sprite(ctx, &mut frame, vp * enemy.model_mat(), &self.basic_enemy_ship_texture, (0.1f32, 0.1f32), Some(ctx.viewport())),
+            }
+        }
+*/
 
         frame.finish().unwrap();
     }

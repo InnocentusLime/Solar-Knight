@@ -39,14 +39,16 @@ impl TestBullet {
         self.pos += vec2(c, s) * PLAYER_BULLET_STEP_LENGTH;
         self.lifetime -= 1;
 
-        let my_mesh = collision_models::consts::BulletTester.apply_transform(&self.transform());
+        let my_body = collision_models::consts::BulletTester.apply_transform(&self.transform());
+        let my_aabb = my_mesh.aabb();
 
         for enemy in hive.enemies.iter_mut() {
             if self.lifetime == 0 { break }
 
             let enemy_body = enemy.phys_body();
+            let enemy_aabb = enemy_body.aabb();
         
-            if enemy_body.check(&my_mesh) && *enemy.hp() > 0 {
+            if *enemy.hp() > 0 && enemy_aabb.collision_test(my_aabb) && enemy_body.check(&my_body) {
                 *enemy.hp_mut() -= 1;
                 self.lifetime = 0;
             } 

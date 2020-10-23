@@ -31,30 +31,6 @@ impl AxisAlignedBoundingBox {
         }
     }
 
-    pub fn of_mesh(mesh : &[Point2<f32>]) -> Self {
-        mesh.iter()
-        .fold(
-            Self::search_init(),
-            |acc, Point2 { x, y }| 
-            AxisAlignedBoundingBox {
-                left : min(acc.left, *x),
-                right : max(acc.right, *x),
-                top : max(acc.top, *y),
-                bottom : min(acc.bottom, *y)
-            }
-        )
-    }
-
-    #[inline]
-    pub fn of_circle(center : Point2<f32>, r : f32) -> Self {
-        AxisAlignedBoundingBox {
-            left : center.x - r,
-            top : center.y + r,
-            right : center.x + r,
-            bottom : center.y + r,
-        }
-    }
-
     #[inline]
     pub fn of_two_aabb(self, other : Self) -> Self {
         AxisAlignedBoundingBox {
@@ -348,6 +324,54 @@ where
     }
 }
 
+pub trait ComputeAxisAlignedBoundingBox {
+    fn aabb(&self) -> AxisAlignedBoundingBox;
+}
+
+impl ComputeAxisAlignedBoundingBox for Circle {
+    #[inline]
+    fn aabb(&self) -> AxisAlignedBoundingBox { 
+        AxisAlignedBoundingBox {
+            left : self.center.x - self.radius,
+            top : self.center.y + self.radius,
+            right : self.center.x + self.radius,
+            bottom : self.center.y + self.radius,
+        }
+    }
+}
+
+impl<M> ComputeAxisAlignedBoundingBox for Mesh<M> 
+where
+    M : Borrow<[Point2<f32>]>,
+{
+    #[inline]
+    fn aabb(&self) -> AxisAlignedBoundingBox { 
+        self.mem.borrow()
+        .iter()
+        .fold(
+            AxisAlignedBoundingBox::search_init(),
+            |acc, Point2 { x, y }| 
+            AxisAlignedBoundingBox {
+                left : min(acc.left, *x),
+                right : max(acc.right, *x),
+                top : max(acc.top, *y),
+                bottom : min(acc.bottom, *y)
+            }
+        )
+    }
+}
+
+impl<A, B> ComputeAxisAlignedBoundingBox for Together<A, B>
+where
+    A : ComputeAxisAlignedBoundingBox,
+    B : ComputeAxisAlignedBoundingBox,
+{
+    #[inline]
+    fn aabb(&self) -> AxisAlignedBoundingBox {
+        AxisAlignedBoundingBox::of_two_aabb(self.a.aabb(), self.b.aabb())
+    }
+}
+
 #[macro_export]
 macro_rules! body_expr {
     (
@@ -424,6 +448,7 @@ macro_rules! declare_bodies {
             use crate::body_type;
             use crate::collision::{ Circle, Mesh, Together };
 
+            #[derive(Clone, Copy)]
             pub enum CollisionModel {
                 $( $name (body_type!($model)) ),+
             }
@@ -444,7 +469,7 @@ macro_rules! declare_bodies {
             mod __collision_impls {
                 use cgmath::{ Transform, Point2 };
                 use std::borrow::{ Borrow, BorrowMut };
-                use crate::collision::{ Circle, Mesh, Together, Collision, Transformable };
+                use crate::collision::{ AxisAlignedBoundingBox, Circle, Mesh, Together, Collision, Transformable, ComputeAxisAlignedBoundingBox };
 
                 use super::CollisionModel;
 
@@ -530,6 +555,16 @@ macro_rules! declare_bodies {
                         match self {
                             $(
                                 CollisionModel::$name(x) => CollisionModel::$name(x.apply_transform(trans))
+                            ),+
+                        }
+                    }
+                }
+
+                impl ComputeAxisAlignedBoundingBox for CollisionModel {
+                    fn aabb(&self) -> AxisAlignedBoundingBox {
+                        match self {
+                            $(
+                                CollisionModel::$name(x) => x.aabb()
                             ),+
                         }
                     }

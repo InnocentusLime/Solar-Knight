@@ -16,6 +16,7 @@ const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
 
 const PLAYER_BULLET_STEP_LENGTH : f32 = 0.05f32;
 const PLAYER_BULLET_LIFE_LENG : u64 = 300;
+const PLAYER_BULLET_RECOIL : u64 = 15;
 pub struct TestBullet {
     pub ang : Rad<f32>,     // Flight direction 
     pub pos : Point2<f32>,  // The buller position
@@ -40,7 +41,7 @@ impl TestBullet {
         self.lifetime -= 1;
 
         let my_body = collision_models::consts::BulletTester.apply_transform(&self.transform());
-        let my_aabb = my_mesh.aabb();
+        let my_aabb = my_body.aabb();
 
         for enemy in hive.enemies.iter_mut() {
             if self.lifetime == 0 { break }
@@ -74,11 +75,13 @@ pub struct Player {
     pub ang : Rad<f32>,
     pub pos : Point2<f32>,
     pub bullets : MemoryChunk<TestBullet>,
+    pub recoil : u64,
 }
 
 impl Player {
     pub fn new() -> Self {
         Player {
+            recoil : 0,
             ang : Rad(0.0f32),
             pos : Point2 { x : 0.0f32, y : 0.0f32 },
             bullets : MemoryChunk::with_capacity(ENEMY_BULLET_LIMIT),
@@ -91,6 +94,7 @@ impl Player {
     }
 
     pub fn update(&mut self, movement : bool, ang : Rad<f32>) {
+        self.recoil = self.recoil.saturating_sub(1);
         self.ang = ang;
 
         if movement {
@@ -107,7 +111,10 @@ impl Player {
     }
 
     pub fn shoot(&mut self) {
-        self.bullets.push(TestBullet::new(self.ang, self.pos));
+        if self.recoil == 0 {
+            self.recoil = PLAYER_BULLET_RECOIL;
+            self.bullets.push(TestBullet::new(self.ang, self.pos));
+        }
     }
 
     pub fn fill_bullet_buffer(&self, buff : &mut VertexBuffer<SpriteData>) {

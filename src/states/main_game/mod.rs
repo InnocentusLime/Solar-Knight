@@ -92,7 +92,7 @@ impl StateData {
                 ),
                 ..
             } => {
-                self.player.shoot();
+                //self.player.shoot();
             },
             _ => (),
         }
@@ -124,7 +124,7 @@ impl StateData {
 
          
         if input_tracker.is_key_down(VirtualKeyCode::Q) {
-                //self.player.shoot();
+                self.player.shoot();
         }
         
 

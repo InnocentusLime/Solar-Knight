@@ -98,12 +98,12 @@ pub struct Together<A, B> {
 }
 
 pub trait Collision<Other> {
-    fn check(&self, other : &Other) -> bool;
+    fn check_collision(&self, other : &Other) -> bool;
 }
 
 impl Collision<Circle> for Circle {
     #[inline]
-    fn check(&self, other : &Circle) -> bool {
+    fn check_collision(&self, other : &Circle) -> bool {
         (self.center - other.center).magnitude() <= self.radius + other.radius
     }
 }
@@ -112,7 +112,7 @@ impl<M> Collision<Mesh<M>> for Circle
 where
     M : Borrow<[Point2<f32>]>,
 {
-    fn check(&self, other : &Mesh<M>) -> bool {
+    fn check_collision(&self, other : &Mesh<M>) -> bool {
         use std::iter::once;
 
         let mesh = other.mem.borrow();
@@ -136,7 +136,7 @@ where
     B : Collision<Circle>,
 {
     #[inline]
-    fn check(&self, other : &Together<A, B>) -> bool { other.a.check(self) || other.b.check(self) }
+    fn check_collision(&self, other : &Together<A, B>) -> bool { other.a.check_collision(self) || other.b.check_collision(self) }
 }
 
 impl<A, B> Collision<Circle> for Together<A, B> 
@@ -145,7 +145,7 @@ where
     B : Collision<Circle>,
 {
     #[inline]
-    fn check(&self, other : &Circle) -> bool { self.a.check(other) || self.b.check(other) }
+    fn check_collision(&self, other : &Circle) -> bool { self.a.check_collision(other) || self.b.check_collision(other) }
 }
 
 impl<M> Collision<Circle> for Mesh<M> 
@@ -153,7 +153,7 @@ where
     M : Borrow<[Point2<f32>]>,
 {
     #[inline]
-    fn check(&self, other : &Circle) -> bool { other.check(self) }
+    fn check_collision(&self, other : &Circle) -> bool { other.check_collision(self) }
 }
 
 impl<M1, M2> Collision<Mesh<M2>> for Mesh<M1> 
@@ -161,7 +161,7 @@ where
     M1 : Borrow<[Point2<f32>]>, 
     M2 : Borrow<[Point2<f32>]>,
 {
-    fn check(&self, other : &Mesh<M2>) -> bool {
+    fn check_collision(&self, other : &Mesh<M2>) -> bool {
         // we use separating axis theorem here to check for collisions
         // https://en.wikipedia.org/wiki/Hyperplane_separation_theorem
         use std::iter::once;
@@ -246,7 +246,7 @@ where
     B : Collision<Mesh<M>>,
 {
     #[inline]
-    fn check(&self, other : &Together<A, B>) -> bool { other.a.check(self) || other.b.check(self) }
+    fn check_collision(&self, other : &Together<A, B>) -> bool { other.a.check_collision(self) || other.b.check_collision(self) }
 }
 
 impl<M, A, B> Collision<Mesh<M>> for Together<A, B> 
@@ -256,7 +256,7 @@ where
     B : Collision<Mesh<M>>,
 {
     #[inline]
-    fn check(&self, other : &Mesh<M>) -> bool { self.a.check(other) || self.b.check(other) }
+    fn check_collision(&self, other : &Mesh<M>) -> bool { self.a.check_collision(other) || self.b.check_collision(other) }
 }
 
 impl<A1, B1, A2, B2> Collision<Together<A2, B2>> for Together<A1, B1> where
@@ -266,9 +266,9 @@ impl<A1, B1, A2, B2> Collision<Together<A2, B2>> for Together<A1, B1> where
     B2 : Collision<A1> + Collision<B1>,
 {
     #[inline]
-    fn check(&self, other : &Together<A2, B2>) -> bool {
-        other.a.check(&self.a) || other.a.check(&self.b) ||
-        other.b.check(&self.a) || other.b.check(&self.b)
+    fn check_collision(&self, other : &Together<A2, B2>) -> bool {
+        other.a.check_collision(&self.a) || other.a.check_collision(&self.b) ||
+        other.b.check_collision(&self.a) || other.b.check_collision(&self.b)
     }
 }
 
@@ -475,10 +475,10 @@ macro_rules! declare_bodies {
 
                 impl Collision<Circle> for CollisionModel {
                     #[inline]
-                    fn check(&self, other : &Circle) -> bool {
+                    fn check_collision(&self, other : &Circle) -> bool {
                         match self {
                             $(
-                                CollisionModel::$name(x) => x.check(other)
+                                CollisionModel::$name(x) => x.check_collision(other)
                             ),+
                         }
                     }
@@ -489,10 +489,10 @@ macro_rules! declare_bodies {
                     M : Borrow<[Point2<f32>]>,
                 {
                     #[inline]
-                    fn check(&self, other : &Mesh<M>) -> bool {
+                    fn check_collision(&self, other : &Mesh<M>) -> bool {
                         match self {
                             $(
-                                CollisionModel::$name(x) => x.check(other)
+                                CollisionModel::$name(x) => x.check_collision(other)
                             ),+
                         }
                     }
@@ -504,15 +504,15 @@ macro_rules! declare_bodies {
                     B : Collision<CollisionModel>,
                 {
                     #[inline]
-                    fn check(&self, other : &Together<A, B>) -> bool {
-                        other.a.check(self) || other.b.check(self)
+                    fn check_collision(&self, other : &Together<A, B>) -> bool {
+                        other.a.check_collision(self) || other.b.check_collision(self)
                     }
                 }
 
                 impl Collision<CollisionModel> for Circle {
                     #[inline]
-                    fn check(&self, other : &CollisionModel) -> bool {
-                        other.check(self)
+                    fn check_collision(&self, other : &CollisionModel) -> bool {
+                        other.check_collision(self)
                     }
                 }
         
@@ -521,8 +521,8 @@ macro_rules! declare_bodies {
                     M : Borrow<[Point2<f32>]>,
                 {
                     #[inline]
-                    fn check(&self, other : &CollisionModel) -> bool {
-                        other.check(self)
+                    fn check_collision(&self, other : &CollisionModel) -> bool {
+                        other.check_collision(self)
                     }
                 }
         
@@ -532,17 +532,17 @@ macro_rules! declare_bodies {
                     B : Collision<CollisionModel>,
                 {
                     #[inline]
-                    fn check(&self, other : &CollisionModel) -> bool {
-                        self.a.check(other) || self.b.check(other)
+                    fn check_collision(&self, other : &CollisionModel) -> bool {
+                        self.a.check_collision(other) || self.b.check_collision(other)
                     }
                 }
 
                 impl Collision<CollisionModel> for CollisionModel {
                     #[inline]
-                    fn check(&self, other : &CollisionModel) -> bool {
+                    fn check_collision(&self, other : &CollisionModel) -> bool {
                         match self {
                             $(
-                                CollisionModel::$name(x) => other.check(x)
+                                CollisionModel::$name(x) => other.check_collision(x)
                             ),+
                         }
                     }

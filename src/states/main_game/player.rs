@@ -49,7 +49,7 @@ impl TestBullet {
             let enemy_body = enemy.phys_body();
             let enemy_aabb = enemy_body.aabb();
         
-            if *enemy.hp() > 0 && enemy_aabb.collision_test(my_aabb) && enemy_body.check(&my_body) {
+            if *enemy.hp() > 0 && enemy_aabb.collision_test(my_aabb) && enemy_body.check_collision(&my_body) {
                 *enemy.hp_mut() -= 1;
                 self.lifetime = 0;
             } 

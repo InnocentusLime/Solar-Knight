@@ -10,7 +10,9 @@ use crate::collision::Collision;
 
 const PLAYER_SIZE : (f32, f32) = (0.1f32, 0.1f32);
 const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
+const PLAYER_STEP_LENGTH : f32 = 0.007f32;
 
+const PLAYER_MAX_SPEED : u64 = 5;
 const PLAYER_BULLET_STEP_LENGTH : f32 = 0.05f32;
 const PLAYER_BULLET_LIFE_LENG : u64 = 300;
 const PLAYER_BULLET_RECOIL : u64 = 15;
@@ -73,6 +75,7 @@ pub struct Player {
     pub pos : Point2<f32>,
     pub bullets : MemoryChunk<TestBullet>,
     pub recoil : u64,
+    pub speed : u64,
 }
 
 impl Player {
@@ -82,7 +85,18 @@ impl Player {
             ang : Rad(0.0f32),
             pos : Point2 { x : 0.0f32, y : 0.0f32 },
             bullets : MemoryChunk::with_capacity(ENEMY_BULLET_LIMIT),
+            speed : 0,
         }
+    }
+
+    #[inline]
+    pub fn increase_speed(&mut self) {
+        self.speed = PLAYER_MAX_SPEED.min(self.speed + 1);
+    }
+
+    #[inline]
+    pub fn decrease_speed(&mut self) {
+        self.speed = self.speed.saturating_sub(1);
     }
 
     #[inline]
@@ -103,14 +117,12 @@ impl Player {
         Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * Matrix4::from_angle_z(self.ang) * Matrix4::from_nonuniform_scale(PLAYER_SIZE.0, PLAYER_SIZE.1, 1.0f32)
     }
 
-    pub fn update(&mut self, movement : bool, ang : Rad<f32>) {
+    pub fn update(&mut self, ang : Rad<f32>) {
         self.recoil = self.recoil.saturating_sub(1);
         self.ang = ang;
 
-        if movement {
-            let (s, c) = self.ang.sin_cos();
-            self.pos += 0.01f32 * vec2(-s, c); 
-        }    
+        let (s, c) = self.ang.sin_cos();
+        self.pos += (self.speed as f32) * 0.01f32 * vec2(-s, c);     
     }
 
     pub fn update_bullets(&mut self, hive : &mut Hive) {

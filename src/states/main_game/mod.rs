@@ -90,14 +90,18 @@ impl StateData {
                 event : event::DeviceEvent::Key (
                     event::KeyboardInput {
                         state : event::ElementState::Pressed,
-                        virtual_keycode : Some(event::VirtualKeyCode::Q),
+                        virtual_keycode,
                         ..
                     }
                     
                 ),
                 ..
             } => {
-                //self.player.shoot();
+                match virtual_keycode {
+                    Some(event::VirtualKeyCode::W) => self.player.increase_speed(),
+                    Some(event::VirtualKeyCode::S) => self.player.decrease_speed(),
+                    _ => (),
+                }
             },
             _ => (),
         }
@@ -123,7 +127,7 @@ impl StateData {
         }
 
         let player_ang = vec2(0.0f32, 1.0f32).angle(input_tracker.mouse_position());
-        self.player.update(input_tracker.is_key_down(VirtualKeyCode::Space), player_ang);
+        self.player.update(player_ang);
         self.hive.update(&self.player);
         self.player.update_bullets(&mut self.hive);
         

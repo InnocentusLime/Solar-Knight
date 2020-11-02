@@ -1,5 +1,5 @@
 use glium::VertexBuffer;
-use cgmath::{ EuclideanSpace, Matrix4, Angle, Rad, Point2, Vector2, Decomposed, Rotation2, Basis2, vec2 };
+use cgmath::{ InnerSpace, EuclideanSpace, Matrix4, Angle, Rad, Point2, Vector2, Decomposed, Rotation2, Basis2, vec2 };
 
 use super::enemies::{ Hive, Enemy };
 use crate::graphics_init::ENEMY_BULLET_LIMIT;
@@ -10,9 +10,6 @@ use crate::collision::Collision;
 
 const PLAYER_SIZE : (f32, f32) = (0.1f32, 0.1f32);
 const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
-
-/// Ship's speed is `1/(10 - x)`. Where `x` is a value which increases when `space` is down
-/// Right now `x` is capped at `8.0f32`
 
 const PLAYER_BULLET_STEP_LENGTH : f32 = 0.05f32;
 const PLAYER_BULLET_LIFE_LENG : u64 = 300;
@@ -86,6 +83,19 @@ impl Player {
             pos : Point2 { x : 0.0f32, y : 0.0f32 },
             bullets : MemoryChunk::with_capacity(ENEMY_BULLET_LIMIT),
         }
+    }
+
+    #[inline]
+    pub fn point_at(&self, at : Point2<f32>) -> Option<Point2<f32>> {
+        use crate::graphics_init::SCREEN_WIDTH;
+
+        let v = at - self.pos;
+        let x = (-SCREEN_WIDTH).max(SCREEN_WIDTH.min(v.x / v.y.abs()));
+        let y = (-1.0f32).max(1.0f32.min(SCREEN_WIDTH * v.y / v.x.abs()));
+        let pointer_v = vec2(x, y);
+
+        if pointer_v.magnitude2() > v.magnitude2() { None }
+        else { Some(<Point2<f32> as EuclideanSpace>::from_vec(pointer_v)) }
     }
 
     #[inline]

@@ -7,9 +7,11 @@ use crate::graphics_init::{ RenderTargets, GraphicsContext, ENEMY_LIMIT };
 use crate::input_tracker::InputTracker;
 use crate::loaders::texture_load_from_file;
 
+mod earth;
 mod enemies;
 mod player;
 
+use earth::*;
 use player::*;
 use enemies::{ Hive, Enemy, tester::Tester };
 
@@ -23,6 +25,7 @@ pub struct StateData {
     background_texture : Texture2d,
     player_bullet_texture : Texture2d,
 
+    earth : Earth,
     player : Player,
     hive : Hive,
 
@@ -35,7 +38,7 @@ impl StateData {
 
         let sun_texture = texture_load_from_file(&ctx.display, "textures/sun.png").unwrap();
         let player_ship_texture = texture_load_from_file(&ctx.display, "textures/player_ship.png").unwrap();
-        let earth_texture = texture_load_from_file(&ctx.display, "textures/earth_texture.png").unwrap();
+        let earth_texture = texture_load_from_file(&ctx.display, "textures/earth.png").unwrap();
         let basic_enemy_ship_texture = texture_load_from_file(&ctx.display, "textures/basic_enemy_ship.png").unwrap();
         let player_bullet_texture = texture_load_from_file(&ctx.display, "textures/player_bullet.png").unwrap();
 
@@ -43,9 +46,10 @@ impl StateData {
             GameState::MainMenu(dat) => {
                 GameState::MainGame(
                     StateData {
+                        earth : Earth::new(),
                         hive : Hive::new(),
-
                         player : Player::new(),
+
                         player_ship_texture,
                         sun_texture,
                         background_texture : dat.background_texture,
@@ -60,9 +64,10 @@ impl StateData {
             _ => {
                 GameState::MainGame(
                     StateData {
+                        earth : Earth::new(),
                         hive : Hive::new(),
-
                         player : Player::new(),
+
                         player_ship_texture,
                         sun_texture,
                         background_texture : texture_load_from_file(&ctx.display, "textures/background.png").unwrap(),
@@ -108,9 +113,11 @@ impl StateData {
 
         use crate::collision::*;
 
+        //self.earth.update();
+
         if self.timer >= SPAWN_RATE {
             self.timer = 0;
-            self.hive.spawn(Enemy::Tester(Tester::new()));
+            //self.hive.spawn(Enemy::Tester(Tester::new()));
         } else if self.hive.alive_count() < ENEMY_LIMIT { 
             self.timer += 1;
         }
@@ -154,7 +161,8 @@ impl StateData {
         let vp = ctx.build_projection_view_matrix();
 
         draw_sprite(ctx, &mut frame, Matrix4::one(), &self.background_texture, Some(ctx.viewport()));
-        draw_sprite(ctx, &mut frame, vp * Matrix4::from_nonuniform_scale(0.4f32, 0.4f32, 1.0f32), &self.sun_texture, Some(ctx.viewport()));
+        draw_sprite(ctx, &mut frame, vp * self.earth.model_mat(), &self.earth_texture, Some(ctx.viewport()));
+        draw_sprite(ctx, &mut frame, vp * Matrix4::from_nonuniform_scale(0.6f32, 0.6f32, 1.0f32), &self.sun_texture, Some(ctx.viewport()));
         draw_sprite(ctx, &mut frame, vp * self.player.model_mat(), &self.player_ship_texture, Some(ctx.viewport()));
 
         // Orphaning technique
@@ -168,6 +176,11 @@ impl StateData {
         ctx.enemy_buffer.invalidate();
         self.hive.fill_enemy_buffer(&mut ctx.enemy_buffer);
         draw_instanced_sprite(ctx, &mut frame, &ctx.enemy_buffer, vp, &self.basic_enemy_ship_texture, Some(ctx.viewport()));
+
+        match self.player.point_at(Point2 { x : 0.0f32, y : 0.0f32 }) {
+            Some(pointer) => draw_sprite(ctx, &mut frame, ctx.proj_mat * Matrix4::from_translation(pointer.to_vec().extend(0.0f32)) * Matrix4::from_nonuniform_scale(0.1f32, 0.1f32, 1.0f32), &self.basic_enemy_ship_texture, Some(ctx.viewport())),
+            None => (),
+        }
 
 /*
         for enemy in self.hive.enemies.iter() {

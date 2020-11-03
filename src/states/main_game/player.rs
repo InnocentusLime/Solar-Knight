@@ -12,10 +12,14 @@ const PLAYER_SIZE : (f32, f32) = (0.1f32, 0.1f32);
 const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
 const PLAYER_STEP_LENGTH : f32 = 0.007f32;
 
-const PLAYER_MAX_SPEED : u64 = 5;
+const PLAYER_MAX_SPEED : u64 = 4;
 const PLAYER_BULLET_STEP_LENGTH : f32 = 0.05f32;
 const PLAYER_BULLET_LIFE_LENG : u64 = 300;
-const PLAYER_BULLET_RECOIL : u64 = 15;
+const PLAYER_BULLET_RECOIL : u64 = 16;
+
+const PLAYER_DASH_LIFE_LENG : u64 = 10;
+const PLAYER_DASH_STEP_LENGTH : f32 = 0.25f32;
+
 pub struct TestBullet {
     pub ang : Rad<f32>,     // Flight direction 
     pub pos : Point2<f32>,  // The buller position
@@ -70,12 +74,22 @@ impl TestBullet {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum DashState {
+    Performing {
+        lifetime : u64,
+        direction : Vector2<f32>,
+    },
+    Done,
+}
+
 pub struct Player {
     pub ang : Rad<f32>,
     pub pos : Point2<f32>,
     pub bullets : MemoryChunk<TestBullet>,
     pub recoil : u64,
     pub speed : u64,
+    pub dash_info : DashState,
 }
 
 impl Player {
@@ -86,6 +100,27 @@ impl Player {
             pos : Point2 { x : 0.0f32, y : 0.0f32 },
             bullets : MemoryChunk::with_capacity(ENEMY_BULLET_LIMIT),
             speed : 0,
+            dash_info : DashState::Done,
+        }
+    }
+
+    pub fn dash_right(&mut self) {
+        match (*self).dash_info {
+            DashState::Performing { .. } => (),
+            DashState::Done => { 
+                let (s, c) = self.ang.sin_cos();
+                self.dash_info = DashState::Performing { lifetime : PLAYER_DASH_LIFE_LENG, direction : vec2(c, s), }
+            },
+        }
+    }
+    
+    pub fn dash_left(&mut self) {
+        match (*self).dash_info {
+            DashState::Performing { .. } => (),
+            DashState::Done => {
+                let (s, c) = self.ang.sin_cos();
+                self.dash_info = DashState::Performing { lifetime : PLAYER_DASH_LIFE_LENG, direction : vec2(-c, -s), }
+            },
         }
     }
 
@@ -123,6 +158,23 @@ impl Player {
 
         let (s, c) = self.ang.sin_cos();
         self.pos += (self.speed as f32) * 0.01f32 * vec2(-s, c);     
+        
+        match (*self).dash_info {
+            DashState::Performing {
+                mut lifetime,
+                direction,
+            } => {
+                let speed = 2.0f32.powi(lifetime as i32 - PLAYER_DASH_LIFE_LENG as i32) * PLAYER_DASH_STEP_LENGTH;
+                self.pos += speed * direction;
+                lifetime -= 1;
+                if lifetime == 0 { 
+                    self.dash_info = DashState::Done 
+                } else {
+                    self.dash_info = DashState::Performing { lifetime, direction }
+                }
+            },
+            DashState::Done => (),
+        }
     }
 
     pub fn update_bullets(&mut self, hive : &mut Hive) {

@@ -1,6 +1,6 @@
 use cgmath::{ EuclideanSpace, Rad, Angle, Vector2, Point2, vec2 };
 use glium::texture::texture2d::Texture2d;
-use glutin::event::VirtualKeyCode;
+use glutin::event::{ VirtualKeyCode, MouseButton };
 
 use super::{ GameState, TransitionRequest };
 use crate::graphics_init::{ RenderTargets, GraphicsContext, ENEMY_LIMIT };
@@ -100,6 +100,8 @@ impl StateData {
                 match virtual_keycode {
                     Some(event::VirtualKeyCode::W) => self.player.increase_speed(),
                     Some(event::VirtualKeyCode::S) => self.player.decrease_speed(),
+                    Some(event::VirtualKeyCode::D) => self.player.dash_right(),
+                    Some(event::VirtualKeyCode::A) => self.player.dash_left(),
                     _ => (),
                 }
             },
@@ -134,7 +136,7 @@ impl StateData {
         ctx.camera.disp = (-self.player.pos.to_vec()).extend(0.0f32);
 
          
-        if input_tracker.is_key_down(VirtualKeyCode::Q) {
+        if input_tracker.is_mouse_button_down(MouseButton::Left) {
                 self.player.shoot();
         }
         

@@ -46,7 +46,7 @@ impl TestBullet {
         let my_body = collision_models::consts::BulletTester.apply_transform(&self.transform());
         let my_aabb = my_body.aabb();
 
-        for enemy in hive.enemies.iter_mut() {
+        for enemy in hive.iter_mut() {
             if self.lifetime == 0 { break }
 
             let enemy_body = enemy.phys_body();
@@ -84,12 +84,12 @@ pub enum DashState {
 }
 
 pub struct Player {
-    pub ang : Rad<f32>,
-    pub pos : Point2<f32>,
-    pub bullets : MemoryChunk<TestBullet>,
-    pub recoil : u64,
-    pub speed : u64,
-    pub dash_info : DashState,
+    ang : Rad<f32>,
+    pos : Point2<f32>,
+    bullets : MemoryChunk<TestBullet>,
+    recoil : u64,
+    speed : u64,
+    dash_info : DashState,
 }
 
 impl Player {
@@ -103,6 +103,9 @@ impl Player {
             dash_info : DashState::Done,
         }
     }
+
+    #[inline]
+    pub fn pos(&self) -> Point2<f32> { self.pos }
 
     pub fn dash_right(&mut self) {
         match (*self).dash_info {

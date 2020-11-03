@@ -28,14 +28,14 @@ impl Enemy {
     pub fn hp_mut(&mut self) -> &mut u64 {
         match self {
             Enemy::Brute(_) => unimplemented!(),
-            Enemy::Tester(x) => &mut x.hp, 
+            Enemy::Tester(x) => x.hp_mut(), 
         }
     }
     
     pub fn hp(&self) -> &u64 {
         match self {
             Enemy::Brute(_) => unimplemented!(),
-            Enemy::Tester(x) => &x.hp, 
+            Enemy::Tester(x) => x.hp(), 
         }
     }
 
@@ -55,7 +55,7 @@ impl Enemy {
 }
 
 pub struct Hive {
-    pub enemies : MemoryChunk<Enemy>, 
+    enemies : MemoryChunk<Enemy>, 
 }
 
 impl Hive {
@@ -110,4 +110,8 @@ impl Hive {
     pub fn spawn(&mut self, enemy : Enemy) {
         self.enemies.push(enemy);
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Enemy> { self.enemies.iter() }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Enemy> { self.enemies.iter_mut() }
 }

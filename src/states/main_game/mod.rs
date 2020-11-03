@@ -133,7 +133,7 @@ impl StateData {
         self.hive.update(&self.player);
         self.player.update_bullets(&mut self.hive);
         
-        ctx.camera.disp = (-self.player.pos.to_vec()).extend(0.0f32);
+        ctx.camera.disp = (-self.player.pos().to_vec()).extend(0.0f32);
 
          
         if input_tracker.is_mouse_button_down(MouseButton::Left) {

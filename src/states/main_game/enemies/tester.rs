@@ -10,9 +10,9 @@ pub const TESTER_SPAWN_HP : u64 = 10;
 pub const TESTER_STEP_LENGTH : f32 = 0.001f32;
 
 pub struct Tester {
-    pub pos : Point2<f32>,
-    pub ang : Rad<f32>,
-    pub hp : u64,
+    pos : Point2<f32>,
+    ang : Rad<f32>,
+    hp : u64,
 }
 
 impl Tester {
@@ -25,7 +25,7 @@ impl Tester {
     }
 
     pub fn update(&mut self, player : &Player) {
-        let player_pos = player.pos;
+        let player_pos = player.pos();
         let ang = vec2(0.0f32, 1.0f32).angle(player_pos.to_vec() - self.pos.to_vec());
         let (s, c) = ang.sin_cos();
 

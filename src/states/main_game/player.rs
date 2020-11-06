@@ -18,7 +18,12 @@ const PLAYER_BULLET_LIFE_LENG : u64 = 300;
 const PLAYER_BULLET_RECOIL : u64 = 16;
 
 const PLAYER_DASH_LIFE_LENG : u64 = 10;
-const PLAYER_DASH_STEP_LENGTH : f32 = 0.25f32;
+const PLAYER_DASH_STEP_LENGTH : f32 = 0.45f32;
+const PLAYER_DASH_FRAK : f32 = std::f32::consts::E / 2.0f32;
+
+fn player_dash_func(x : u64) -> f32 {
+    (1.0f32 / PLAYER_DASH_FRAK).powi(PLAYER_DASH_LIFE_LENG as i32 - x as i32 + 1)
+}
 
 pub struct TestBullet {
     pub ang : Rad<f32>,     // Flight direction 
@@ -167,7 +172,9 @@ impl Player {
                 mut lifetime,
                 direction,
             } => {
-                let speed = 2.0f32.powi(lifetime as i32 - PLAYER_DASH_LIFE_LENG as i32) * PLAYER_DASH_STEP_LENGTH;
+                let sum : f32 = (1..(PLAYER_DASH_LIFE_LENG + 1)).map(|x| player_dash_func(x)).sum();
+
+                let speed = player_dash_func(lifetime) / sum * PLAYER_DASH_STEP_LENGTH;
                 self.pos += speed * direction;
                 lifetime -= 1;
                 if lifetime == 0 { 

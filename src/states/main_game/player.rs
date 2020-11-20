@@ -17,6 +17,8 @@ const PLAYER_BULLET_STEP_LENGTH : f32 = 0.05f32;
 const PLAYER_BULLET_LIFE_LENG : u64 = 300;
 const PLAYER_BULLET_RECOIL : u64 = 16;
 
+const PLAYER_DASH_TRACE_STEP_LENGTH : f32 = 0.02f32;
+const PLAYER_DASH_TRACE_LIFE_LENG : u64 = 7;
 const PLAYER_DASH_LIFE_LENG : u64 = 10;
 const PLAYER_DASH_STEP_LENGTH : f32 = 0.45f32;
 const PLAYER_DASH_FRAK : f32 = std::f32::consts::E / 2.0f32;
@@ -82,8 +84,11 @@ impl TestBullet {
 #[derive(Clone, Copy, Debug)]
 pub enum DashState {
     Performing {
+        trace_lifetime : u64,
         lifetime : u64,
         direction : Vector2<f32>,
+        trace_pos : Point2<f32>,
+        trace_direction : Vector2<f32>,
     },
     Done,
 }
@@ -117,7 +122,18 @@ impl Player {
             DashState::Performing { .. } => (),
             DashState::Done => { 
                 let (s, c) = self.ang.sin_cos();
-                self.dash_info = DashState::Performing { lifetime : PLAYER_DASH_LIFE_LENG, direction : vec2(c, s), }
+                let player_push = (self.speed as f32 / 3.0f32) * vec2(-s, c);    
+                let dash_direction = vec2(c, s);
+
+                self.dash_info = 
+                    DashState::Performing {
+                        trace_lifetime : PLAYER_DASH_TRACE_LIFE_LENG,
+                        lifetime : PLAYER_DASH_LIFE_LENG, 
+                        direction : dash_direction, 
+                        trace_pos : self.pos,
+                        trace_direction : (-(player_push + dash_direction)).normalize(),
+                    }
+                ;
             },
         }
     }
@@ -127,7 +143,18 @@ impl Player {
             DashState::Performing { .. } => (),
             DashState::Done => {
                 let (s, c) = self.ang.sin_cos();
-                self.dash_info = DashState::Performing { lifetime : PLAYER_DASH_LIFE_LENG, direction : vec2(-c, -s), }
+                let player_push = (self.speed as f32 / 3.0f32) * vec2(-s, c);    
+                let dash_direction = vec2(-c, -s);
+
+                self.dash_info = 
+                    DashState::Performing { 
+                        trace_lifetime : PLAYER_DASH_TRACE_LIFE_LENG,
+                        lifetime : PLAYER_DASH_LIFE_LENG, 
+                        direction : dash_direction, 
+                        trace_pos : self.pos,
+                        trace_direction : (-(player_push + dash_direction)).normalize(),
+                    }
+                ;
             },
         }
     }
@@ -160,27 +187,63 @@ impl Player {
         Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * Matrix4::from_angle_z(self.ang) * Matrix4::from_nonuniform_scale(PLAYER_SIZE.0, PLAYER_SIZE.1, 1.0f32)
     }
 
+    #[inline]
+    pub fn dash_trace_model_mat(&self) -> Option<Matrix4<f32>> {
+        match self.dash_info {
+            DashState::Performing {
+                trace_lifetime,   
+                trace_direction,
+                trace_pos,
+                ..
+            } if trace_lifetime > 0 => {
+                let k = 2.0f32 * (trace_lifetime as f32) / (PLAYER_DASH_TRACE_LIFE_LENG as f32);
+                let model_mat = 
+                    Matrix4::from_translation(trace_pos.to_vec().extend(0.0f32)) * 
+                    Matrix4::new(
+                        trace_direction.x, trace_direction.y, 0.0f32, 0.0f32,
+                        -trace_direction.y, trace_direction.x, 0.0f32, 0.0f32,
+                        0.0f32, 0.0f32, 1.0f32, 0.0f32,
+                        0.0f32, 0.0f32, 0.0f32, 1.0f32,
+                    ) * 
+                    Matrix4::from_nonuniform_scale(k * 0.04f32, (k / 2.0f32 * 0.4f32 + 0.6f32) * 0.125f32, 1.0f32) 
+                ;
+                Some(model_mat)
+            },
+            _ => None,
+        }
+    }
+
     pub fn update(&mut self, ang : Rad<f32>) {
         self.recoil = self.recoil.saturating_sub(1);
         self.ang = ang;
 
         let (s, c) = self.ang.sin_cos();
         self.pos += (self.speed as f32) * 0.01f32 * vec2(-s, c);     
-        
-        match (*self).dash_info {
+       
+        let mut dash_info = self.dash_info;
+        match &mut dash_info {
             DashState::Performing {
-                mut lifetime,
+                trace_lifetime,
+                lifetime,
                 direction,
+                trace_pos,
+                trace_direction,
+                ..
             } => {
                 let sum : f32 = (1..(PLAYER_DASH_LIFE_LENG + 1)).map(|x| player_dash_func(x)).sum();
+                let speed = player_dash_func(*lifetime) / sum * PLAYER_DASH_STEP_LENGTH;
 
-                let speed = player_dash_func(lifetime) / sum * PLAYER_DASH_STEP_LENGTH;
-                self.pos += speed * direction;
-                lifetime -= 1;
-                if lifetime == 0 { 
+                self.pos += speed * (*direction);
+                if *trace_lifetime > 0 {                
+                    *trace_lifetime -= 1;
+                    *trace_pos += PLAYER_DASH_TRACE_STEP_LENGTH * (*trace_direction);
+                }
+
+                *lifetime -= 1; 
+                if *lifetime == 0 { 
                     self.dash_info = DashState::Done 
                 } else {
-                    self.dash_info = DashState::Performing { lifetime, direction }
+                    self.dash_info = dash_info
                 }
             },
             DashState::Done => (),

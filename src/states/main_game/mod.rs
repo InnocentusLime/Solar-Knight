@@ -24,6 +24,7 @@ pub struct StateData {
     basic_enemy_ship_texture : Texture2d,
     background_texture : Texture2d,
     player_bullet_texture : Texture2d,
+    player_dash_trace_texture : Texture2d,
 
     earth : Earth,
     player : Player,
@@ -41,6 +42,7 @@ impl StateData {
         let earth_texture = texture_load_from_file(&ctx.display, "textures/earth.png").unwrap();
         let basic_enemy_ship_texture = texture_load_from_file(&ctx.display, "textures/basic_enemy_ship.png").unwrap();
         let player_bullet_texture = texture_load_from_file(&ctx.display, "textures/player_bullet.png").unwrap();
+        let player_dash_trace_texture = texture_load_from_file(&ctx.display, "textures/player_dash_trace.png").unwrap();
 
         match old {
             GameState::MainMenu(dat) => {
@@ -56,6 +58,7 @@ impl StateData {
                         earth_texture,
                         basic_enemy_ship_texture,
                         player_bullet_texture,
+                        player_dash_trace_texture,
 
                         timer : 0,
                     }
@@ -74,6 +77,7 @@ impl StateData {
                         earth_texture,
                         basic_enemy_ship_texture,
                         player_bullet_texture,
+                        player_dash_trace_texture,
 
                         timer : 0,
                     }
@@ -185,6 +189,11 @@ impl StateData {
 
         match self.player.point_at(Point2 { x : 0.0f32, y : 0.0f32 }) {
             Some(pointer) => draw_sprite(ctx, &mut frame, ctx.proj_mat * Matrix4::from_translation(pointer.to_vec().extend(0.0f32)) * Matrix4::from_nonuniform_scale(0.1f32, 0.1f32, 1.0f32), &self.basic_enemy_ship_texture, Some(ctx.viewport())),
+            None => (),
+        }
+
+        match self.player.dash_trace_model_mat() {
+            Some(mat) => draw_sprite(ctx, &mut frame, vp * mat, &self.player_dash_trace_texture, Some(ctx.viewport())),
             None => (),
         }
 

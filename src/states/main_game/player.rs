@@ -1,5 +1,5 @@
 use glium::VertexBuffer;
-use cgmath::{ InnerSpace, EuclideanSpace, Matrix4, Angle, Rad, Point2, Vector2, Decomposed, Rotation2, Basis2, vec2 };
+use cgmath::{ InnerSpace, EuclideanSpace, Matrix4, Angle, Rad, Point2, Vector2, Matrix3, Rotation2, Basis2, vec2 };
 
 use super::enemies::{ Hive, Enemy };
 use crate::graphics_init::ENEMY_BULLET_LIMIT;
@@ -7,6 +7,7 @@ use crate::basic_graphics_data::SpriteData;
 use crate::containers::MemoryChunk;
 use crate::collision_models;
 use crate::collision::Collision;
+use crate::transform2d_utils::*;
 
 const PLAYER_SIZE : (f32, f32) = (0.1f32, 0.1f32);
 const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
@@ -28,15 +29,15 @@ fn player_dash_func(x : u64) -> f32 {
 }
 
 pub struct TestBullet {
-    pub ang : Rad<f32>,     // Flight direction 
+    pub direction : Vector2<f32>,     // Flight direction 
     pub pos : Point2<f32>,  // The buller position
     pub lifetime : u64,     // The remaining frames for the bullet to live
 }
 
 impl TestBullet {
-    pub fn new(ang : Rad<f32>, pos : Point2<f32>) -> Self {
+    pub fn new(direction : Vector2<f32>, pos : Point2<f32>) -> Self {
         TestBullet {
-            ang, pos,
+            direction, pos,
             lifetime : PLAYER_BULLET_LIFE_LENG,
         }
     }
@@ -46,8 +47,7 @@ impl TestBullet {
 
         assert!(self.lifetime > 0);
 
-        let (s, c) = (self.ang + Rad(std::f32::consts::FRAC_PI_2)).sin_cos();
-        self.pos += vec2(c, s) * PLAYER_BULLET_STEP_LENGTH;
+        self.pos += PLAYER_BULLET_STEP_LENGTH * self.direction;
         self.lifetime -= 1;
 
         let my_body = collision_models::consts::BulletTester.apply_transform(&self.transform());
@@ -58,7 +58,7 @@ impl TestBullet {
 
             let enemy_body = enemy.phys_body();
             let enemy_aabb = enemy_body.aabb();
-        
+            
             if *enemy.hp() > 0 && enemy_aabb.collision_test(my_aabb) && enemy_body.check_collision(&my_body) {
                 *enemy.hp_mut() -= 1;
                 self.lifetime = 0;
@@ -67,17 +67,25 @@ impl TestBullet {
     }
 
     #[inline]
-    pub fn transform(&self) -> Decomposed<Vector2<f32>, Basis2<f32>> {
-        Decomposed {
-            scale : 1.0f32,
-            rot : <Basis2<f32> as Rotation2<f32>>::from_angle(self.ang),
-            disp : self.pos.to_vec(),
-        }
+    pub fn transform(&self) -> Matrix3<f32> {
+        matrix3_from_translation(self.pos.to_vec()) *
+        Matrix3::new(
+            self.direction.y, -self.direction.x, 0.0f32,
+            self.direction.x, self.direction.y, 0.0f32,
+            0.0f32, 0.0f32, 1.0f32,
+        )
     }
 
     #[inline]
     pub fn model_mat(&self) -> Matrix4<f32> {
-        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * Matrix4::from_angle_z(self.ang) * Matrix4::from_nonuniform_scale(TESTER_BULLET_SIZE.0, TESTER_BULLET_SIZE.1, 1.0f32)
+        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * 
+        Matrix4::new(
+            self.direction.y, -self.direction.x, 0.0f32, 0.0f32,
+            self.direction.x, self.direction.y, 0.0f32, 0.0f32,
+            0.0f32, 0.0f32, 1.0f32, 0.0f32,
+            0.0f32, 0.0f32, 0.0f32, 1.0f32,
+        ) * 
+        Matrix4::from_nonuniform_scale(TESTER_BULLET_SIZE.0, TESTER_BULLET_SIZE.1, 1.0f32)
     }
 }
 
@@ -94,7 +102,7 @@ pub enum DashState {
 }
 
 pub struct Player {
-    ang : Rad<f32>,
+    direction : Vector2<f32>,
     pos : Point2<f32>,
     bullets : MemoryChunk<TestBullet>,
     recoil : u64,
@@ -106,7 +114,7 @@ impl Player {
     pub fn new() -> Self {
         Player {
             recoil : 0,
-            ang : Rad(0.0f32),
+            direction : vec2(0.0f32, 0.0f32),
             pos : Point2 { x : 0.0f32, y : 0.0f32 },
             bullets : MemoryChunk::with_capacity(ENEMY_BULLET_LIMIT),
             speed : 0,
@@ -121,9 +129,8 @@ impl Player {
         match (*self).dash_info {
             DashState::Performing { .. } => (),
             DashState::Done => { 
-                let (s, c) = self.ang.sin_cos();
-                let player_push = (self.speed as f32 / 3.0f32) * vec2(-s, c);    
-                let dash_direction = vec2(c, s);
+                let player_push = (self.speed as f32 / 4.0f32) * self.direction;    
+                let dash_direction = vec2(self.direction.y, -self.direction.x);
 
                 self.dash_info = 
                     DashState::Performing {
@@ -142,9 +149,8 @@ impl Player {
         match (*self).dash_info {
             DashState::Performing { .. } => (),
             DashState::Done => {
-                let (s, c) = self.ang.sin_cos();
-                let player_push = (self.speed as f32 / 3.0f32) * vec2(-s, c);    
-                let dash_direction = vec2(-c, -s);
+                let player_push = (self.speed as f32 / 4.0f32) * self.direction;    
+                let dash_direction = vec2(-self.direction.y, self.direction.x);
 
                 self.dash_info = 
                     DashState::Performing { 
@@ -184,7 +190,14 @@ impl Player {
 
     #[inline]
     pub fn model_mat(&self) -> Matrix4<f32> {
-        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * Matrix4::from_angle_z(self.ang) * Matrix4::from_nonuniform_scale(PLAYER_SIZE.0, PLAYER_SIZE.1, 1.0f32)
+        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * 
+        Matrix4::new(
+            self.direction.y, -self.direction.x, 0.0f32, 0.0f32,
+            self.direction.x, self.direction.y, 0.0f32, 0.0f32,
+            0.0f32, 0.0f32, 1.0f32, 0.0f32,
+            0.0f32, 0.0f32, 0.0f32, 1.0f32,
+        ) * 
+        Matrix4::from_nonuniform_scale(PLAYER_SIZE.0, PLAYER_SIZE.1, 1.0f32)
     }
 
     #[inline]
@@ -213,12 +226,11 @@ impl Player {
         }
     }
 
-    pub fn update(&mut self, ang : Rad<f32>) {
+    pub fn update(&mut self, direction : Vector2<f32>) {
         self.recoil = self.recoil.saturating_sub(1);
-        self.ang = ang;
+        self.direction = direction.normalize();
 
-        let (s, c) = self.ang.sin_cos();
-        self.pos += (self.speed as f32) * 0.01f32 * vec2(-s, c);     
+        self.pos += (self.speed as f32) * 0.01f32 * self.direction;     
        
         let mut dash_info = self.dash_info;
         match &mut dash_info {
@@ -260,7 +272,7 @@ impl Player {
     pub fn shoot(&mut self) {
         if self.recoil == 0 {
             self.recoil = PLAYER_BULLET_RECOIL;
-            self.bullets.push(TestBullet::new(self.ang, self.pos));
+            self.bullets.push(TestBullet::new(self.direction, self.pos));
         }
     }
 

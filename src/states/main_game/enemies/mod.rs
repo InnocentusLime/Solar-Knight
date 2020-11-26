@@ -2,7 +2,7 @@ pub mod brute;
 pub mod tester;
 
 use glium::VertexBuffer;
-use cgmath::Matrix4;
+use cgmath::{ Matrix3, Matrix4 };
 
 use crate::graphics_init::ENEMY_LIMIT;
 use crate::collision_models::CollisionModel;

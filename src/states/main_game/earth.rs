@@ -1,30 +1,30 @@
 use cgmath::{ Point2, EuclideanSpace, Angle, InnerSpace, Rad, Matrix4, vec2 };
 
-pub const EARTH_PHASE_DELTA : f32 = 0.02f32;
+pub const EARTH_PHASE_COUNT : u64 = 2000;
 pub const EARTH_SUN_DISTANCE : f32 = 3.0f32;
-pub const EARTH_POSITION : (f32, f32) = (EARTH_SUN_DISTANCE, 0.0f32);
+pub const EARTH_PHASE_DELTA : f32 = std::f32::consts::TAU / (EARTH_PHASE_COUNT as f32);
 
 pub struct Earth {
     pos : Point2<f32>,
+    phase : u64,
 }
 
 impl Earth {
     pub fn new() -> Earth {
         Earth {
-            pos : Point2 { x : EARTH_POSITION.0, y : EARTH_POSITION.1 },
+            pos : Point2 { x : EARTH_SUN_DISTANCE, y : 0.0f32 },
+            phase : 0,
         }
     }
 
     pub fn update(&mut self) {
-        let start_vec = vec2(EARTH_POSITION.0, EARTH_POSITION.1);
-        let curr_vec = self.pos.to_vec();
-
-        let phase = start_vec.angle(curr_vec);
-        let new_phase = phase + Rad(EARTH_PHASE_DELTA);
-        let (s, c) = new_phase.sin_cos();
-        let new_pos = Point2 { x : EARTH_SUN_DISTANCE * c, y : EARTH_SUN_DISTANCE * s };
-
-        self.pos = new_pos;
+        self.phase = (self.phase + 1) % EARTH_PHASE_COUNT;
+        self.pos = 
+            Point2 { 
+                x : EARTH_SUN_DISTANCE * (self.phase as f32 * EARTH_PHASE_DELTA).cos(), 
+                y : EARTH_SUN_DISTANCE * (self.phase as f32 * EARTH_PHASE_DELTA).sin(),
+            }
+        ;
     }
 
     #[inline]

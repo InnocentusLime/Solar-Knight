@@ -123,7 +123,7 @@ impl StateData {
 
         use crate::collision::*;
 
-        //self.earth.update();
+        self.earth.update();
 
         if self.timer >= SPAWN_RATE {
             self.timer = 0;
@@ -132,8 +132,7 @@ impl StateData {
             self.timer += 1;
         }
 
-        let player_ang = vec2(0.0f32, 1.0f32).angle(input_tracker.mouse_position());
-        self.player.update(player_ang);
+        self.player.update(input_tracker.mouse_position());
         self.hive.update(&self.player);
         self.player.update_bullets(&mut self.hive);
         

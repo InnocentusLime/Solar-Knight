@@ -80,18 +80,18 @@ fn point_line_segment_distance(p : Point2<f32>, line_p_1 : Point2<f32>, line_p_2
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Circle {
     pub center : Point2<f32>,
     pub radius : f32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Mesh<M> {
     pub mem : M,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Together<A, B> {
     pub a : A,
     pub b : B,
@@ -448,7 +448,7 @@ macro_rules! declare_bodies {
             use crate::body_type;
             use crate::collision::{ Circle, Mesh, Together };
 
-            #[derive(Clone, Copy)]
+            #[derive(Clone, Copy, Debug)]
             pub enum CollisionModel {
                 $( $name (body_type!($model)) ),+
             }

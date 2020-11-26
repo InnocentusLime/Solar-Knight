@@ -29,9 +29,9 @@ fn player_dash_func(x : u64) -> f32 {
 }
 
 pub struct TestBullet {
-    pub direction : Vector2<f32>,     // Flight direction 
-    pub pos : Point2<f32>,  // The buller position
-    pub lifetime : u64,     // The remaining frames for the bullet to live
+    direction : Vector2<f32>,     // Flight direction 
+    pos : Point2<f32>,  // The buller position
+    lifetime : u64,     // The remaining frames for the bullet to live
 }
 
 impl TestBullet {

@@ -17,6 +17,8 @@ impl Earth {
         }
     }
 
+    pub fn pos(&self) -> Point2<f32> { self.pos }
+
     pub fn update(&mut self) {
         self.phase = (self.phase + 1) % EARTH_PHASE_COUNT;
         self.pos = 

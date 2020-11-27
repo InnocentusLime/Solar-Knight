@@ -17,6 +17,13 @@ use enemies::{ Hive, Enemy, tester::Tester };
 
 const SPAWN_RATE : u64 = 180;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PointerTarget {
+    None,
+    Sun,
+    Earth,
+}
+
 pub struct StateData {
     player_ship_texture : Texture2d,
     sun_texture : Texture2d,
@@ -31,6 +38,7 @@ pub struct StateData {
     hive : Hive,
 
     timer : u64,
+    pointer_target : PointerTarget,
 }
 
 impl StateData {
@@ -61,6 +69,7 @@ impl StateData {
                         player_dash_trace_texture,
 
                         timer : 0,
+                        pointer_target : PointerTarget::None,
                     }
                 )
             },
@@ -80,6 +89,7 @@ impl StateData {
                         player_dash_trace_texture,
 
                         timer : 0,
+                        pointer_target : PointerTarget::None,
                     }
                 )
             },
@@ -106,6 +116,9 @@ impl StateData {
                     Some(event::VirtualKeyCode::S) => self.player.decrease_speed(),
                     Some(event::VirtualKeyCode::D) => self.player.dash_right(),
                     Some(event::VirtualKeyCode::A) => self.player.dash_left(),
+                    Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
+                    Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
+                    Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
                     _ => (),
                 }
             },
@@ -186,8 +199,21 @@ impl StateData {
         self.hive.fill_enemy_buffer(&mut ctx.enemy_buffer);
         draw_instanced_sprite(ctx, &mut frame, &ctx.enemy_buffer, vp, &self.basic_enemy_ship_texture, Some(ctx.viewport()));
 
-        match self.player.point_at(Point2 { x : 0.0f32, y : 0.0f32 }) {
-            Some(pointer) => draw_sprite(ctx, &mut frame, ctx.proj_mat * Matrix4::from_translation(pointer.to_vec().extend(0.0f32)) * Matrix4::from_nonuniform_scale(0.1f32, 0.1f32, 1.0f32), &self.basic_enemy_ship_texture, Some(ctx.viewport())),
+        let pointer_target = 
+            match self.pointer_target {
+                PointerTarget::None => None,
+                PointerTarget::Sun => Some(Point2 { x : 0.0f32, y : 0.0f32 }),
+                PointerTarget::Earth => Some(self.earth.pos()),
+            }
+        ;
+
+        let pointer = pointer_target.and_then(|x| self.player.point_at(x));
+
+        match pointer {
+            Some(pointer) => {
+                let model_mat = ctx.proj_mat * Matrix4::from_translation(pointer.to_vec().extend(0.0f32)) * Matrix4::from_nonuniform_scale(0.1f32, 0.1f32, 1.0f32);
+                draw_sprite(ctx, &mut frame, model_mat, &self.basic_enemy_ship_texture, Some(ctx.viewport()))
+            },
             None => (),
         }
 

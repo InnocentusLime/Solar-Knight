@@ -167,7 +167,8 @@ impl GameState {
 pub type TransitionRequest = Box<dyn FnOnce(&mut GraphicsContext, GameState) -> GameState>;
 
 /// The fps at which the game updates
-pub const UPDATE_FPS : f32 = 60.0f32;
+pub const TICKS_PER_SECOND : u32 = 60;
+pub const FRAMES_PER_SECOND : u32 = 60;
 
 /// List of modules which are present
 pub mod booting;

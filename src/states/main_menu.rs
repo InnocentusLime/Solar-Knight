@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use glium::texture::texture2d::Texture2d;
 
 use super::{ GameState, TransitionRequest }; 
@@ -40,7 +42,7 @@ impl StateData {
         }
     }
 
-    pub fn update(&mut self, _ctx : &mut GraphicsContext, _input_tracker : &InputTracker) -> Option<TransitionRequest> {
+    pub fn update(&mut self, _ctx : &mut GraphicsContext, _input_tracker : &InputTracker, _dt : Duration) -> Option<TransitionRequest> {
         None
     }
 

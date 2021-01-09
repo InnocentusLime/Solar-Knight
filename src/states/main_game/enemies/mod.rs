@@ -1,6 +1,8 @@
 pub mod brute;
 pub mod tester;
 
+use std::time::Duration;
+
 use glium::VertexBuffer;
 use cgmath::{ Matrix3, Matrix4 };
 
@@ -18,10 +20,10 @@ pub enum Enemy {
 }
 
 impl Enemy {
-    pub fn update(&mut self, player : &Player) {
+    pub fn update(&mut self, player : &Player, dt : Duration) {
         match self {
             Enemy::Brute(_) => (),
-            Enemy::Tester(x) => x.update(player),
+            Enemy::Tester(x) => x.update(player, dt),
         }
     }
 
@@ -68,10 +70,10 @@ impl Hive {
     #[inline]
     pub fn alive_count(&self) -> usize { self.enemies.len() }
 
-    pub fn update(&mut self, player : &Player) {
+    pub fn update(&mut self, player : &Player, dt : Duration) {
         self.enemies
         .iter_mut()
-        .for_each(|x| x.update(player));
+        .for_each(|x| x.update(player, dt));
 
         self.enemies.retain(|x| *x.hp() > 0);
     }

@@ -1,32 +1,42 @@
+use std::time::Duration;
+
 use cgmath::{ Point2, EuclideanSpace, Angle, InnerSpace, Rad, Matrix4, vec2 };
 
-pub const EARTH_PHASE_COUNT : u64 = 2000;
+use crate::duration_ext::*;
+
 pub const EARTH_SUN_DISTANCE : f32 = 3.0f32;
-pub const EARTH_PHASE_DELTA : f32 = std::f32::consts::TAU / (EARTH_PHASE_COUNT as f32);
+pub const EARTH_LOOP_TIME : Duration = Duration::from_secs(40);
+// Duration::as_secs_f32 is not a const fn yet (72440)
+//pub const EARTH_ANGLE_SPEED : f32 = std::f32::consts::TAU / EARTH_LOOP_TIME.as_secs_f32();
+pub const EARTH_ANGLE_SPEED : f32 = std::f32::consts::TAU / 40.0f32;
 
 pub struct Earth {
     pos : Point2<f32>,
-    phase : u64,
+    timing : Duration,
 }
 
 impl Earth {
     pub fn new() -> Earth {
         Earth {
             pos : Point2 { x : EARTH_SUN_DISTANCE, y : 0.0f32 },
-            phase : 0,
+            timing : <Duration as DurationExt>::my_zero(),
         }
     }
 
     pub fn pos(&self) -> Point2<f32> { self.pos }
 
-    pub fn update(&mut self) {
-        self.phase = (self.phase + 1) % EARTH_PHASE_COUNT;
+    pub fn update(&mut self, dt : Duration) {
+        self.timing += dt;
+
+        let phase = self.timing.as_secs_f32() * EARTH_ANGLE_SPEED;
         self.pos = 
             Point2 { 
-                x : EARTH_SUN_DISTANCE * (self.phase as f32 * EARTH_PHASE_DELTA).cos(), 
-                y : EARTH_SUN_DISTANCE * (self.phase as f32 * EARTH_PHASE_DELTA).sin(),
+                x : EARTH_SUN_DISTANCE * phase.cos(), 
+                y : EARTH_SUN_DISTANCE * phase.sin(),
             }
         ;
+
+        self.timing = self.timing.my_rem(EARTH_LOOP_TIME)
     }
 
     #[inline]

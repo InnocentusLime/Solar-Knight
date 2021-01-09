@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use glium::VertexBuffer;
 use cgmath::{ InnerSpace, EuclideanSpace, Matrix4, Angle, Rad, Point2, Vector2, Matrix3, Rotation2, Basis2, vec2 };
 
@@ -8,31 +10,37 @@ use crate::containers::MemoryChunk;
 use crate::collision_models;
 use crate::collision::Collision;
 use crate::transform2d_utils::*;
+use crate::duration_ext::*;
 
 const PLAYER_SIZE : (f32, f32) = (0.1f32, 0.1f32);
 const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
-const PLAYER_STEP_LENGTH : f32 = 0.007f32;
+const PLAYER_SPEED : f32 = 0.21f32;
 
 const PLAYER_MAX_SPEED : u64 = 4;
-const PLAYER_BULLET_STEP_LENGTH : f32 = 0.05f32;
-const PLAYER_BULLET_LIFE_LENG : u64 = 300;
-const PLAYER_BULLET_RECOIL : u64 = 16;
+const PLAYER_BULLET_SPEED : f32 = 4.0f32;
+const PLAYER_BULLET_LIFE_LENG : Duration = Duration::from_secs(3);
+const PLAYER_BULLET_RECOIL : Duration = Duration::from_millis(133);
 
-const PLAYER_DASH_TRACE_STEP_LENGTH : f32 = 0.02f32;
-const PLAYER_DASH_TRACE_LIFE_LENG : u64 = 7;
-const PLAYER_DASH_LIFE_LENG : u64 = 10;
-const PLAYER_DASH_STEP_LENGTH : f32 = 0.45f32;
-const PLAYER_DASH_FRAK : f32 = std::f32::consts::E / 2.0f32;
+const PLAYER_DASH_TRACE_SPEED : f32 = 0.6f32;
+const PLAYER_DASH_TRACE_LIFE_LENG : Duration = Duration::from_millis(218);
+const PLAYER_DASH_LIFE_LENG : Duration = Duration::from_millis(150);
+const PLAYER_DASH_DISTANCE : f32 = 0.55f32;
+const PLAYER_DASH_FRAK : f32 = std::f32::consts::E;
 const PLAYER_SPEED_IGNORE_STRENGTH : f32 = 8.0f32;
 
-fn player_dash_func(x : u64) -> f32 {
-    (1.0f32 / PLAYER_DASH_FRAK).powi(PLAYER_DASH_LIFE_LENG as i32 - x as i32 + 1)
+fn player_dash_func(x : f32) -> f32 {
+    PLAYER_DASH_FRAK.powf(PLAYER_DASH_LIFE_LENG.as_secs_f32() - x + 1.0f32) - PLAYER_DASH_FRAK
+}
+
+// integral from 0 to x of player_dash_func
+fn player_dash_func_integral(x : f32) -> f32 {
+    -(PLAYER_DASH_FRAK.powf(PLAYER_DASH_LIFE_LENG.as_secs_f32() - x + 1.0f32) / PLAYER_DASH_FRAK.ln() + PLAYER_DASH_FRAK * x)
 }
 
 pub struct TestBullet {
     direction : Vector2<f32>,     // Flight direction 
     pos : Point2<f32>,  // The buller position
-    lifetime : u64,     // The remaining frames for the bullet to live
+    lifetime : Duration,     // The remaining frames for the bullet to live
 }
 
 impl TestBullet {
@@ -43,26 +51,24 @@ impl TestBullet {
         }
     }
 
-    pub fn update(&mut self, hive : &mut Hive) {
+    pub fn update(&mut self, hive : &mut Hive, dt : Duration) {
         use crate::collision::*;
 
-        assert!(self.lifetime > 0);
-
-        self.pos += PLAYER_BULLET_STEP_LENGTH * self.direction;
-        self.lifetime -= 1;
+        self.pos += dt.as_secs_f32() * PLAYER_BULLET_SPEED * self.direction;
+        self.lifetime = self.lifetime.my_saturating_sub(dt);
 
         let my_body = collision_models::consts::BulletTester.apply_transform(&self.transform());
         let my_aabb = my_body.aabb();
 
         for enemy in hive.iter_mut() {
-            if self.lifetime == 0 { break }
+            if self.lifetime.my_is_zero() { break }
 
             let enemy_body = enemy.phys_body();
             let enemy_aabb = enemy_body.aabb();
             
             if *enemy.hp() > 0 && enemy_aabb.collision_test(my_aabb) && enemy_body.check_collision(&my_body) {
                 *enemy.hp_mut() -= 1;
-                self.lifetime = 0;
+                self.lifetime = <Duration as DurationExt>::my_zero();
             } 
         }
     }
@@ -93,8 +99,8 @@ impl TestBullet {
 #[derive(Clone, Copy, Debug)]
 pub enum DashState {
     Performing {
-        trace_lifetime : u64,
-        lifetime : u64,
+        trace_lifetime : Duration,
+        lifetime : Duration,
         direction : Vector2<f32>,
         trace_pos : Point2<f32>,
         trace_direction : Vector2<f32>,
@@ -106,7 +112,7 @@ pub struct Player {
     direction : Vector2<f32>,
     pos : Point2<f32>,
     bullets : MemoryChunk<TestBullet>,
-    recoil : u64,
+    recoil : Duration,
     speed : u64,
     dash_info : DashState,
 }
@@ -114,7 +120,7 @@ pub struct Player {
 impl Player {
     pub fn new() -> Self {
         Player {
-            recoil : 0,
+            recoil : <Duration as DurationExt>::my_zero(),
             direction : vec2(0.0f32, 0.0f32),
             pos : Point2 { x : 0.0f32, y : 0.0f32 },
             bullets : MemoryChunk::with_capacity(ENEMY_BULLET_LIMIT),
@@ -209,8 +215,8 @@ impl Player {
                 trace_direction,
                 trace_pos,
                 ..
-            } if trace_lifetime > 0 => {
-                let k = 2.0f32 * (trace_lifetime as f32) / (PLAYER_DASH_TRACE_LIFE_LENG as f32);
+            } if !trace_lifetime.my_is_zero() => {
+                let k = 2.0f32 * (trace_lifetime.as_secs_f32()) / (PLAYER_DASH_TRACE_LIFE_LENG.as_secs_f32());
                 let model_mat = 
                     Matrix4::from_translation(trace_pos.to_vec().extend(0.0f32)) * 
                     Matrix4::new(
@@ -227,8 +233,8 @@ impl Player {
         }
     }
 
-    pub fn update(&mut self, direction : Vector2<f32>) {
-        self.recoil = self.recoil.saturating_sub(1);
+    pub fn update(&mut self, direction : Vector2<f32>, dt : Duration) {
+        self.recoil = self.recoil.my_saturating_sub(dt);
         self.direction = direction.normalize();
 
         self.pos += (self.speed as f32) * 0.01f32 * self.direction;     
@@ -243,17 +249,18 @@ impl Player {
                 trace_direction,
                 ..
             } => {
-                let sum : f32 = (1..(PLAYER_DASH_LIFE_LENG + 1)).map(|x| player_dash_func(x)).sum();
-                let speed = player_dash_func(*lifetime) / sum * PLAYER_DASH_STEP_LENGTH;
+                let sum : f32 = player_dash_func_integral(PLAYER_DASH_LIFE_LENG.as_secs_f32()) - player_dash_func_integral(0.0f32);
+                let frak = (player_dash_func(PLAYER_DASH_LIFE_LENG.as_secs_f32() - lifetime.as_secs_f32()) / sum) * dt.as_secs_f32();
+                let speed = frak * PLAYER_DASH_DISTANCE;
 
                 self.pos += speed * (*direction);
-                if *trace_lifetime > 0 {                
-                    *trace_lifetime -= 1;
-                    *trace_pos += PLAYER_DASH_TRACE_STEP_LENGTH * (*trace_direction);
+                if !trace_lifetime.my_is_zero() {                
+                    *trace_lifetime = trace_lifetime.my_saturating_sub(dt);
+                    *trace_pos += PLAYER_DASH_TRACE_SPEED * dt.as_secs_f32() * (*trace_direction);
                 }
 
-                *lifetime -= 1; 
-                if *lifetime == 0 { 
+                *lifetime = lifetime.my_saturating_sub(dt); 
+                if lifetime.my_is_zero() { 
                     self.dash_info = DashState::Done 
                 } else {
                     self.dash_info = dash_info
@@ -263,15 +270,15 @@ impl Player {
         }
     }
 
-    pub fn update_bullets(&mut self, hive : &mut Hive) {
+    pub fn update_bullets(&mut self, hive : &mut Hive, dt : Duration) {
         self.bullets.iter_mut()
-        .for_each(|x| x.update(hive));
+        .for_each(|x| x.update(hive, dt));
 
-        self.bullets.retain(|x| x.lifetime > 0);
+        self.bullets.retain(|x| !x.lifetime.my_is_zero());
     }
 
     pub fn shoot(&mut self) {
-        if self.recoil == 0 {
+        if self.recoil.my_is_zero() {
             self.recoil = PLAYER_BULLET_RECOIL;
             self.bullets.push(TestBullet::new(self.direction, self.pos));
         }

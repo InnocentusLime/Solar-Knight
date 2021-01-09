@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use cgmath::{ Angle, Matrix4, EuclideanSpace, InnerSpace, Rad, Point2, Matrix3, Vector2, Basis2, Rotation2, vec2 };
 
 use crate::collision::Transformable;
@@ -8,7 +10,7 @@ use crate::transform2d_utils::*;
 
 pub const TESTER_SIZE : (f32, f32) = (0.1f32, 0.1f32);
 pub const TESTER_SPAWN_HP : u64 = 10;
-pub const TESTER_STEP_LENGTH : f32 = 0.001f32;
+pub const TESTER_SPEED : f32 = 0.06f32;
 
 pub struct Tester {
     pos : Point2<f32>,
@@ -25,13 +27,13 @@ impl Tester {
         }
     }
 
-    pub fn update(&mut self, player : &Player) {
+    pub fn update(&mut self, player : &Player, dt : Duration) {
         let player_pos = player.pos();
         let direction = (player_pos.to_vec() - self.pos.to_vec()).normalize();
 
         if self.hp > 0 {
             self.direction = direction;
-            self.pos += TESTER_STEP_LENGTH * self.direction;
+            self.pos += (TESTER_SPEED * dt.as_secs_f32()) * self.direction;
         } else {
             // we turn into a spiny boi on death
             

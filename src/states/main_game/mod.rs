@@ -1,8 +1,11 @@
+use std::time::Duration;
+
 use cgmath::{ EuclideanSpace, Rad, Angle, Vector2, Point2, vec2 };
 use glium::texture::texture2d::Texture2d;
 use glutin::event::{ VirtualKeyCode, MouseButton };
 
 use super::{ GameState, TransitionRequest };
+use crate::duration_ext::*;
 use crate::graphics_init::{ RenderTargets, GraphicsContext, ENEMY_LIMIT };
 use crate::input_tracker::InputTracker;
 use crate::loaders::texture_load_from_file;
@@ -15,7 +18,7 @@ use earth::*;
 use player::*;
 use enemies::{ Hive, Enemy, tester::Tester };
 
-const SPAWN_RATE : u64 = 180;
+const SPAWN_RATE : Duration = Duration::from_secs(3);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum PointerTarget {
@@ -37,7 +40,7 @@ pub struct StateData {
     player : Player,
     hive : Hive,
 
-    timer : u64,
+    timer : Duration,
     pointer_target : PointerTarget,
 }
 
@@ -68,7 +71,7 @@ impl StateData {
                         player_bullet_texture,
                         player_dash_trace_texture,
 
-                        timer : 0,
+                        timer : SPAWN_RATE,
                         pointer_target : PointerTarget::None,
                     }
                 )
@@ -88,7 +91,7 @@ impl StateData {
                         player_bullet_texture,
                         player_dash_trace_texture,
 
-                        timer : 0,
+                        timer : SPAWN_RATE,
                         pointer_target : PointerTarget::None,
                     }
                 )
@@ -128,7 +131,7 @@ impl StateData {
         None 
     }
 
-    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker) -> Option<TransitionRequest> {
+    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, dt : Duration) -> Option<TransitionRequest> {
         use cgmath::{ vec2, dot };
         use cgmath::{ Transform, Angle, InnerSpace, Matrix4 };
 
@@ -136,18 +139,18 @@ impl StateData {
 
         use crate::collision::*;
 
-        self.earth.update();
+        self.earth.update(dt);
 
-        if self.timer >= SPAWN_RATE {
-            self.timer = 0;
+        if self.timer.my_is_zero() {
+            self.timer = SPAWN_RATE;
             //self.hive.spawn(Enemy::Tester(Tester::new()));
         } else if self.hive.alive_count() < ENEMY_LIMIT { 
-            self.timer += 1;
+            self.timer = self.timer.my_saturating_sub(dt);
         }
 
-        self.player.update(input_tracker.mouse_position());
-        self.hive.update(&self.player);
-        self.player.update_bullets(&mut self.hive);
+        self.player.update(input_tracker.mouse_position(), dt);
+        self.hive.update(&self.player, dt);
+        self.player.update_bullets(&mut self.hive, dt);
         
         ctx.camera.disp = (-self.player.pos().to_vec()).extend(0.0f32);
 

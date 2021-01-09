@@ -1,4 +1,10 @@
+#![cfg_attr(feature = "bench", feature(test))]
+
+#[cfg(feature = "bench")]
+extern crate test;
+
 mod macros;
+mod duration_ext;
 mod transform2d_utils;
 mod graphics_init;
 mod basic_graphics_data;
@@ -88,7 +94,7 @@ fn main() -> Result<(), Box<dyn StdError>> {
                     // Updating is ignored if a state change is requested
                     while transition_request.is_none() && tick_time_acc >= tick_duration {
                         // Do the updating
-                        transition_request = state.update(&mut ctx, &input_tracker);
+                        transition_request = state.update(&mut ctx, &input_tracker, tick_duration);
 
                         tick_time_acc -= tick_duration;
                     }

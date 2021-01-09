@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::{ GameState, TransitionRequest };
 use crate::graphics_init::{ RenderTargets, GraphicsContext };
 use crate::input_tracker::InputTracker;
@@ -19,7 +21,7 @@ impl StateData {
 
     pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> { None }
 
-    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker) -> Option<TransitionRequest> {
+    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, _ : Duration) -> Option<TransitionRequest> {
         use super::main_menu;
 
         if self.frame_counter >= SLEEP_FRAMES {

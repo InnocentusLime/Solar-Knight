@@ -14,3 +14,8 @@ log = "*"
 simplelog = "*"
 glutin = "*"
 glium = "*"
+
+[features]
+default = []
+
+bench = []

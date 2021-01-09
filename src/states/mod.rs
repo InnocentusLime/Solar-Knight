@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::error::Error as StdError;
 
 use crate::graphics_init::{ RenderTargets, GraphicsContext };
@@ -74,11 +75,6 @@ use crate::input_tracker::InputTracker;
 /// in constant time, so it's not guaranteed that the engine will fully
 /// empty the event queue before calling `update`.
 ///
-/// As mentioned, we consider it a good choice to have the game updating
-/// at constant time (+- milliseconds). It simplifies the implementation
-/// of most things in general and rules out possible game design challenges
-/// when the assumption that the game is played at constant FPS is added.
-///
 /// The rendering routine *MUST NOT MODIFY THE STATE*. It must be *READ ONLY*.
 /// That means that all updates, which *SEEM* like they belong to rendering
 /// (i.e. animations) must be handled by the `update` routine.
@@ -94,7 +90,7 @@ use crate::input_tracker::InputTracker;
 ///
 /// Despite the engine having code for handling the cases where multiple state
 /// transitions can be requested one *SHOULD NOT* construct code which creates
-/// more than one state transition.
+/// more than one transition request.
 pub enum GameState {
     /// This state indicates that the engine should quit.
     /// Make sure that all code which causes the game to shutdown
@@ -142,11 +138,11 @@ impl GameState {
     /// The update routine of the state.
     /// This procedure is responsible for everything.
     #[inline]
-    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker) -> Option<TransitionRequest> {
+    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, dt : Duration) -> Option<TransitionRequest> {
         match self {
-            GameState::Booting(x) => x.update(ctx, input_tracker),
-            GameState::MainMenu(x) => x.update(ctx, input_tracker),
-            GameState::MainGame(x) => x.update(ctx, input_tracker),
+            GameState::Booting(x) => x.update(ctx, input_tracker, dt),
+            GameState::MainMenu(x) => x.update(ctx, input_tracker, dt),
+            GameState::MainGame(x) => x.update(ctx, input_tracker, dt),
             _ => None,
         }
     }

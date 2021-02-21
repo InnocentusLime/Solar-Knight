@@ -20,7 +20,7 @@ mod earth;
 //mod player;
 
 use earth::*;
-use ships::Battlefield;
+use ships::*;
 //use player::*;
 //use enemies::{ Hive, Enemy, tester::Tester };
 
@@ -33,6 +33,7 @@ enum PointerTarget {
     Sun,
     Earth,
 }
+*/
 
 struct DasherTraceData {
     direction : Vector2<f32>,
@@ -47,12 +48,11 @@ impl DasherTraceData {
         }
     }
 
-    fn update(&mut self, player : &Player, dash_direction : Vector2<f32>) {
-        self.position = player.pos();
-        self.direction = -(dash_direction + (player.get_speed() as f32 / Player::MAX_SPEED as f32) * player.direction());
+    fn update(&mut self, player : ShipBorrow<PlayerShip>, dash_direction : Vector2<f32>) {
+        self.position = player.core.pos;
+        self.direction = -(dash_direction + 0.7 * (player.layout.main_engine.get_speed() as f32 / PlayerEngine::MAX_LVL as f32) * player.core.direction);
     }
 }
-*/
 
 pub struct StateData {
     player_ship_texture : Texture2d,
@@ -68,7 +68,7 @@ pub struct StateData {
 
     timer : Duration,
     //pointer_target : PointerTarget,
-    //dasher_trace_data : DasherTraceData,
+    dasher_trace_data : DasherTraceData,
     bullet_sys : BulletSystem,
 }
 
@@ -117,7 +117,7 @@ impl StateData {
 
                 timer : SPAWN_RATE,
                 //pointer_target : PointerTarget::None,
-                //dasher_trace_data : DasherTraceData::new(),
+                dasher_trace_data : DasherTraceData::new(),
                 bullet_sys : BulletSystem::new(),
                 battlefield,
             }
@@ -139,34 +139,28 @@ impl StateData {
                 ),
                 ..
             } => {
-                if let Some(player) = self.battlefield.player() {
-                    // Feel free to go crazy to implement controls
-                    // for other layouts.
-                    use ships::{ ShipLayout, PlayerShip };
-                    match &mut player.layout {
-                        ShipLayout::PlayerShip(sh) => {
-                            match virtual_keycode {
-                                Some(event::VirtualKeyCode::W) => sh.increase_speed(),
-                                Some(event::VirtualKeyCode::S) => sh.decrease_speed(),
-                            /*
-                                Some(event::VirtualKeyCode::D) => {
-                                    self.player.dash_right()
-                                    .map_or((), |x| self.dasher_trace_data.update(&self.player, x))
-                                    // update the dash data
-                                },
-                                Some(event::VirtualKeyCode::A) => {
-                                    self.player.dash_left()
-                                    .map_or((), |x| self.dasher_trace_data.update(&self.player, x))
-                                    // update the dash data
-                                },
-                                Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
-                                Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
-                                Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
-                            */
-                                _ => (),
-                            }
-                        },     
-                        _ => (), // Unsupported layout
+                use self::ships::{ ShipDowncast, PlayerShip };
+                let dasher_trace_data = &mut self.dasher_trace_data;
+                if let Some(mut player) = self.battlefield.player_downcasted_mut::<PlayerShip>() {
+                    match virtual_keycode {
+                        Some(event::VirtualKeyCode::W) => player.increase_speed(),
+                        Some(event::VirtualKeyCode::S) => player.decrease_speed(),
+                        Some(event::VirtualKeyCode::D) => {
+                            player.dash_right()
+                            .map_or((), |x| dasher_trace_data.update(player.downgrade(), x))
+                            // update the dash data
+                        },
+                        Some(event::VirtualKeyCode::A) => {
+                            player.dash_left()
+                            .map_or((), |x| dasher_trace_data.update(player.downgrade(), x))
+                            // update the dash data
+                        },
+                        /*
+                        Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
+                        Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
+                        Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
+                        */
+                        _ => (),
                     }
                 }
             },
@@ -193,26 +187,23 @@ impl StateData {
         }
         */
 
-        if let Some(player) = self.battlefield.player() {
+        use self::ships::PlayerShip;
+        if let Some(player) = self.battlefield.player_downcasted_mut::<PlayerShip>() {
             player.core.direction = input_tracker.mouse_position().normalize();
-            ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);
 
-            use ships::{ ShipLayout, PlayerShip };
-            match &mut player.layout {
-                ShipLayout::PlayerShip(x) => {        
-                    if input_tracker.is_mouse_button_down(MouseButton::Left) {
-                        x.gun.shoot(&player.core)
-                        .map_or((), |x| self.bullet_sys.spawn(x));
-                    }
-                },
-                _ => warn!("Can't shoot with current player layout"),
+            if input_tracker.is_mouse_button_down(MouseButton::Left) {
+                player.layout.gun.shoot(&player.core)
+                .map_or((), |x| self.bullet_sys.spawn(x));
             }
-
         } else { panic!("No player!!"); }
 
         self.battlefield.update(dt);
         self.bullet_sys.update(&mut self.battlefield, dt);
         self.battlefield.think(&mut self.bullet_sys);
+        
+        if let Some(player) = self.battlefield.player_downcasted::<PlayerShip>() {
+            ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);
+        } else { panic!("No player!!"); }
          
         /*
         let sun_box = mesh_of_sprite(Matrix4::one(), vec2(0.4f32, 0.4f32));
@@ -242,7 +233,6 @@ impl StateData {
         draw_sprite(ctx, &mut frame, Matrix4::one(), &self.background_texture, Some(ctx.viewport()));
         draw_sprite(ctx, &mut frame, vp * self.earth.model_mat(), &self.earth_texture, Some(ctx.viewport()));
         draw_sprite(ctx, &mut frame, vp * Matrix4::from_nonuniform_scale(0.6f32, 0.6f32, 1.0f32), &self.sun_texture, Some(ctx.viewport()));
-        //draw_sprite(ctx, &mut frame, vp * self.player.model_mat(), &self.player_ship_texture, Some(ctx.viewport()));
 
         // Orphaning technique
         // https://stackoverflow.com/questions/43036568/when-should-glinvalidatebufferdata-be-used
@@ -277,11 +267,12 @@ impl StateData {
         }
         */
 
-        /*
         const PLAYER_DASH_TRACE_SPEED : f32 = 0.6f32;
         // If we are doing the dash (player returns the dash parameter),
         // draw the trace
-        self.player.dash_trace_param()
+        self.battlefield
+        .player_downcasted::<PlayerShip>()
+        .and_then(|x| x.dash_trace_param())
         .map_or(
             (),
             |t| {
@@ -300,7 +291,6 @@ impl StateData {
                 draw_sprite(ctx, &mut frame, vp * model_mat, &self.player_dash_trace_texture, Some(ctx.viewport()))
             }
         );
-        */
         
         frame.finish().unwrap();
     }

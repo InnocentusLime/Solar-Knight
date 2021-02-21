@@ -22,7 +22,7 @@ macro_rules! declare_ships {
         fn no_ai<T>(
             _layout : &mut T, 
             _core : &$crate::core::Core, 
-            _others : &std_ext::ExtractResultMut<Ship>, 
+            _others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
             bullet_system : &mut $crate::gun::BulletSystem
         ) {}
         
@@ -34,7 +34,7 @@ macro_rules! declare_ships {
 
             impl $name {
                 const SPRITE_SIZE : (f32, f32) = ($spr_x, $spr_y);
-                const AI_PROC : fn(&mut $name, &$crate::core::Core, &std_ext::ExtractResultMut<Ship>, &mut $crate::gun::BulletSystem) = $ai_proc;
+                const AI_PROC : fn(&mut $name, &$crate::core::Core, &std_ext::ExtractResultMut<Ship<ShipLayout>>, &mut $crate::gun::BulletSystem) = $ai_proc;
 
                 #[inline]
                 pub fn new() -> Self {
@@ -55,7 +55,7 @@ macro_rules! declare_ships {
                 }
 
                 #[inline(always)]
-                pub fn think(&mut self, core : &$crate::core::Core, others : &std_ext::ExtractResultMut<Ship>, bullet_system : &mut $crate::gun::BulletSystem) { 
+                pub fn think(&mut self, core : &$crate::core::Core, others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, bullet_system : &mut $crate::gun::BulletSystem) { 
                     (Self::AI_PROC)(self, core, others, bullet_system) 
                 }
             }
@@ -76,7 +76,7 @@ macro_rules! declare_ships {
             }
             
             #[inline]
-            pub fn think(&mut self, core : &$crate::core::Core, others : &std_ext::ExtractResultMut<Ship>, bullet_system : &mut $crate::gun::BulletSystem) {
+            pub fn think(&mut self, core : &$crate::core::Core, others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, bullet_system : &mut $crate::gun::BulletSystem) {
                 match self {
                 $(
                     ShipLayout::$name(l) => l.think(core, others, bullet_system),
@@ -85,15 +85,15 @@ macro_rules! declare_ships {
             }
         }
 
-        pub struct Ship {
+        pub struct Ship<S> {
             pub core : $crate::core::Core,
-            pub layout : ShipLayout,
+            pub layout : S,
         }
 
-        impl Ship {
+        impl Ship<ShipLayout> {
             $(
             #[inline]
-            pub fn $con(team : $crate::core::Team, pos : cgmath::Point2<f32>, dir : cgmath::Vector2<f32>) -> Ship {
+            pub fn $con(team : $crate::core::Team, pos : cgmath::Point2<f32>, dir : cgmath::Vector2<f32>) -> Ship<ShipLayout> {
                 Ship {
                     layout : ShipLayout::$name($name::new()),
                     core : $crate::core::Core::new($spawn_hp, $crate::collision_models::model_indices::CollisionModelIndex::$collision, team, pos, dir),
@@ -107,7 +107,7 @@ macro_rules! declare_ships {
             }
             
             #[inline]
-            pub fn think(&mut self, others : &std_ext::ExtractResultMut<Ship>, bullet_system : &mut $crate::gun::BulletSystem) {
+            pub fn think(&mut self, others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, bullet_system : &mut $crate::gun::BulletSystem) {
                 self.layout.think(&self.core, others, bullet_system)
             }
 
@@ -137,7 +137,7 @@ macro_rules! declare_ships {
         }
 
         pub struct Battlefield {
-            ships : std_ext::collections::MemoryChunk<Ship>,
+            ships : std_ext::collections::MemoryChunk<Ship<ShipLayout>>,
         }
 
         impl Battlefield {
@@ -149,13 +149,38 @@ macro_rules! declare_ships {
                 }
             }
 
-            pub fn spawn(&mut self, ship : Ship) {
+            pub fn spawn(&mut self, ship : Ship<ShipLayout>) {
                 self.ships.push(ship);
+            }
+            
+            #[inline]
+            pub fn player_mut(&mut self) -> Option<&mut Ship<ShipLayout>> {
+                self.ships.as_mut_slice().first_mut()
+            }
+            
+            #[inline]
+            pub fn player_downcasted_mut<S>(&mut self) -> Option<ShipBorrowMut<S>> 
+            where
+                Ship<ShipLayout> : ShipDowncast<S>,
+            {
+                self.ships.as_mut_slice()
+                .first_mut()
+                .and_then(|x| x.downcast_mut())
             }
 
             #[inline]
-            pub fn player(&mut self) -> Option<&mut Ship> {
-                self.ships.as_mut_slice().first_mut()
+            pub fn player(&self) -> Option<&Ship<ShipLayout>> {
+                self.ships.as_slice().first()
+            }
+            
+            #[inline]
+            pub fn player_downcasted<S>(&self) -> Option<ShipBorrow<S>> 
+            where
+                Ship<ShipLayout> : ShipDowncast<S>,
+            {
+                self.ships.as_slice()
+                .first()
+                .and_then(|x| x.downcast())
             }
 
             pub fn update(&mut self, dt : std::time::Duration) {
@@ -215,11 +240,57 @@ macro_rules! declare_ships {
         use std::slice::IterMut;
         use std::iter::Map;
         impl<'a> $crate::gun::TargetSystem<'a> for Battlefield {
-            type Iter = Map<IterMut<'a, Ship>, fn(&mut Ship) -> &mut $crate::core::Core>;
+            type Iter = Map<IterMut<'a, Ship<ShipLayout>>, fn(&mut Ship<ShipLayout>) -> &mut $crate::core::Core>;
 
             fn entity_iterator(&'a mut self) -> Self::Iter {
                 self.ships.iter_mut().map(|x| &mut x.core)
             }
         }
+
+        #[derive(Clone, Copy)]
+        pub struct ShipBorrow<'a, S> {
+            pub core : &'a $crate::core::Core,
+            pub layout : &'a S,
+        }
+        
+        pub struct ShipBorrowMut<'a, S> {
+            pub core : &'a mut $crate::core::Core,
+            pub layout : &'a mut S,
+        }
+
+        impl<'a, S> ShipBorrowMut<'a, S> {
+            #[inline]
+            pub fn downgrade(&self) -> ShipBorrow<S> {
+                ShipBorrow {
+                    core : &*self.core,
+                    layout : &*self.layout,
+                }
+            }
+        }
+
+        pub trait ShipDowncast<S> {
+            fn downcast(&self) -> Option<ShipBorrow<S>>;
+            fn downcast_mut(&mut self) -> Option<ShipBorrowMut<S>>;
+        }
+
+        $(
+        impl ShipDowncast<$name> for Ship<ShipLayout> {
+            #[inline]
+            fn downcast(&self) -> Option<ShipBorrow<$name>> {
+                match &self.layout {
+                    ShipLayout::$name(layout) => Some(ShipBorrow { core : &self.core, layout }),
+                    _ => None,
+                }
+            }
+            
+            #[inline]
+            fn downcast_mut(&mut self) -> Option<ShipBorrowMut<$name>> {
+                match &mut self.layout {
+                    ShipLayout::$name(layout) => Some(ShipBorrowMut { core : &mut self.core, layout }),
+                    _ => None,
+                }
+            }
+        }
+        )+
     };
 }

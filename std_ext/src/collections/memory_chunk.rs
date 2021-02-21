@@ -14,6 +14,11 @@ impl<T> MemoryChunk<T> {
 
     #[inline]
     pub fn push(&mut self, x : T) { self.0.push(x) }
+    
+    #[inline]
+    pub fn as_slice(&self) -> &[T] {
+        self.0.as_slice()
+    }
 
     #[inline]
     pub fn as_mut_slice(&mut self) -> &mut [T] {

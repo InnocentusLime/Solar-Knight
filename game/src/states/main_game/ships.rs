@@ -1,3 +1,5 @@
+use cgmath::{ Vector2, vec2 };
+
 use ship_parts::{ declare_engine, declare_gun, declare_ships, exponential_decrease_curve };
 
 declare_engine!(
@@ -19,7 +21,7 @@ declare_gun!(
 
 declare_engine!(
     snappy_engine PlayerEngine { 
-        speed_mul : 0.3f32, 
+        speed_mul : 0.5f32, 
         max_lvl : 4, 
         direction : (0.0f32, 1.0f32),
     }
@@ -27,10 +29,10 @@ declare_engine!(
 
 declare_engine!(
     directed_soft_engine PlayerDash {
-        speed_mul : 0.6f32,
+        speed_mul : 6.0f32,
         max_lvl : 1,
-        one_step_duration : std::time::Duration::from_millis(150),
-        change_curve : exponential_decrease_curve!(std::f32::consts::E / 2.0f32),
+        one_step_duration : std::time::Duration::from_millis(180),
+        change_curve : exponential_decrease_curve!(std::f32::consts::E / 2.1f32),
     }
 );
 
@@ -47,27 +49,27 @@ declare_ships!(
 );
 
 // Shortcut-controls for player's layout
-impl PlayerShip {
+impl<'a> ShipBorrowMut<'a, PlayerShip> {
     #[inline]
-    pub fn increase_speed(&mut self) { self.main_engine.increase_speed() }
+    pub fn increase_speed(&mut self) { self.layout.main_engine.increase_speed() }
     
     #[inline]
-    pub fn decrease_speed(&mut self) { self.main_engine.decrease_speed() }
+    pub fn decrease_speed(&mut self) { self.layout.main_engine.decrease_speed() }
 
     #[inline]
     pub fn is_dashing(&self) -> bool {
-        self.dasher.is_changing()
+        self.layout.dasher.is_changing()
     }
 
-/*
     pub fn dash_right(&mut self) -> Option<Vector2<f32>> {
         if !self.is_dashing() {
-            let direction = cgmath_ext::rotate_vector_ox(
             // Check `dash_left` for info about how it works
-            self.dasher.snap(1);
-            self.dasher.decrease_speed();
+            let direction = cgmath_ext::rotate_vector_ox(self.core.direction, vec2(0.0f32, -1.0f32));
+            self.layout.dasher.direction = direction;
+            self.layout.dasher.snap(1);
+            self.layout.dasher.decrease_speed();
             // return the dash direction
-            Some(self.rdash.map_direction(self.direction))
+            Some(direction)
         } else { None }
     }
     
@@ -77,11 +79,25 @@ impl PlayerShip {
             // update all its interior data to be `1`.
             // We'll then call `decrease_speed` to make engine's
             // speed decrease from 1 to 0.
-            self.ldash.snap(1);
-            self.ldash.decrease_speed();
+            let direction = cgmath_ext::rotate_vector_ox(self.core.direction, vec2(0.0f32, 1.0f32));
+            self.layout.dasher.direction = direction;
+            self.layout.dasher.snap(1);
+            self.layout.dasher.decrease_speed();
             // return the dash direction
-            Some(self.ldash.map_direction(self.direction))
+            Some(direction)
         } else { None }
     }
-*/
+}
+
+impl<'a> ShipBorrow<'a, PlayerShip> {
+    #[inline]
+    pub fn is_dashing(&self) -> bool {
+        self.layout.dasher.is_changing()
+    }
+    
+    #[inline]
+    pub fn dash_trace_param(&self) -> Option<f32> {
+        if self.is_dashing() { Some(self.layout.dasher.get_speed()) }
+        else { None }
+    }
 }

@@ -1,0 +1,20 @@
+[package]
+name = "game"
+version = "0.1.0"
+authors = ["InnocentusLime <InnocentusLime.help@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cgmath = "0.18.0"
+glium = "*"
+glutin = "*"
+log = "*"
+image = "*"
+
+sys_api = { path = "../sys_api" }
+collision = { path = "../collision" }
+ship_parts = { path = "../ship_parts" }
+std_ext = { path = "../std_ext" }
+cgmath_ext = { path = "../cgmath_ext" }

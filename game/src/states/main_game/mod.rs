@@ -6,7 +6,7 @@ use glium::texture::texture2d::Texture2d;
 use glutin::event::{ VirtualKeyCode, MouseButton };
 
 use sys_api::basic_graphics_data::SpriteData;
-use ship_parts::gun::{ BulletSystem, TESTER_BULLET_SIZE };
+use ship_parts::{ gun::{ BulletSystem, TESTER_BULLET_SIZE }, core::Team };
 use super::{ GameState, TransitionRequest };
 use std_ext::collections::memory_chunk::MemoryChunk;
 use std_ext::*;
@@ -187,14 +187,12 @@ impl StateData {
 
         self.earth.update(dt);
 
-        /*
         if self.timer.my_is_zero() {
             self.timer = SPAWN_RATE;
-            //self.hive.spawn(Enemy::Tester(Tester::new()));
-        } else if self.hive.alive_count() < ENEMY_LIMIT { 
+            self.battlefield.spawn(Ship::enemy_tester(Team::Hive, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
+        } else { // TODO introduce enemy limit
             self.timer = self.timer.my_saturating_sub(dt);
         }
-        */
 
         use self::ships::PlayerShip;
         if let Some(player) = self.battlefield.player_downcasted_mut::<PlayerShip>() {

@@ -28,6 +28,14 @@ declare_engine!(
 );
 
 declare_engine!(
+    snappy_engine TesterEnemyEngine { 
+        speed_mul : 0.06f32, 
+        max_lvl : 1, 
+        direction : (0.0f32, 1.0f32),
+    }
+);
+
+declare_engine!(
     directed_soft_engine PlayerDash {
         speed_mul : 6.0f32,
         max_lvl : 1,
@@ -35,6 +43,19 @@ declare_engine!(
         change_curve : exponential_decrease_curve!(std::f32::consts::E / 2.1f32),
     }
 );
+
+pub fn enemy_tester_ai(
+    _layout : &mut EnemyTester, 
+    core : &mut ship_parts::core::Core, 
+    others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
+    _bullet_system : &mut ship_parts::gun::BulletSystem,
+    _dt : std::time::Duration,
+) {
+    use cgmath::InnerSpace;
+
+    let player : ShipBorrow<PlayerShip> = others[0].downcast().unwrap();
+    core.direction = (player.core.pos - core.pos).normalize();
+}
 
 declare_ships!(
     ship PlayerShip (player_ship) {
@@ -46,6 +67,15 @@ declare_ships!(
         [ai = no_ai::<PlayerShip>; data = ()]
         [sprite_size = (0.1f32, 0.1f32)]
         [spawn_hp = 3; collision = Player]
+    }
+
+    ship EnemyTester (enemy_tester) {
+        [engines]
+        main_engine : TesterEnemyEngine[start=1],
+        [guns]
+        [ai = enemy_tester_ai; data = ()]
+        [sprite_size = (0.1f32, 0.1f32)]
+        [spawn_hp = 3; collision = EnemyTester]
     }
 );
 

@@ -21,7 +21,7 @@ macro_rules! declare_ships {
     ) => {
         fn no_ai<T>(
             _layout : &mut T, 
-            _core : &$crate::core::Core, 
+            _core : &mut $crate::core::Core, 
             _others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
             _bullet_system : &mut $crate::gun::BulletSystem,
             _dt : std::time::Duration,
@@ -39,7 +39,7 @@ macro_rules! declare_ships {
                 const AI_PROC : 
                     fn(
                         &mut $name, 
-                        &$crate::core::Core, 
+                        &mut $crate::core::Core, 
                         &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
                         &mut $crate::gun::BulletSystem, 
                         std::time::Duration
@@ -68,7 +68,7 @@ macro_rules! declare_ships {
                 #[inline(always)]
                 pub fn think(
                     &mut self, 
-                    core : &$crate::core::Core, 
+                    core : &mut $crate::core::Core, 
                     others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
                     bullet_system : &mut $crate::gun::BulletSystem,
                     dt : std::time::Duration
@@ -95,7 +95,7 @@ macro_rules! declare_ships {
             #[inline]
             pub fn think(
                 &mut self, 
-                core : &$crate::core::Core, 
+                core : &mut $crate::core::Core, 
                 others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
                 bullet_system : &mut $crate::gun::BulletSystem,
                 dt : std::time::Duration,
@@ -136,7 +136,7 @@ macro_rules! declare_ships {
                 bullet_system : &mut $crate::gun::BulletSystem,
                 dt : std::time::Duration
             ) {
-                self.layout.think(&self.core, others, bullet_system, dt)
+                self.layout.think(&mut self.core, others, bullet_system, dt)
             }
 
             pub fn sprite_size(&self) -> (f32, f32) {

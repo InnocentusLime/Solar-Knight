@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use log::{ trace, info, warn };
-use cgmath::{ EuclideanSpace, One, Rad, Angle, Vector2, Point2, vec2, point2 };
+use cgmath::{ EuclideanSpace, InnerSpace, One, Rad, Angle, Vector2, Point2, vec2, point2 };
 use glium::texture::texture2d::Texture2d;
 use glutin::event::{ VirtualKeyCode, MouseButton };
 
@@ -26,14 +26,25 @@ use ships::*;
 
 const SPAWN_RATE : Duration = Duration::from_secs(3);
 
-/*
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum PointerTarget {
     None,
     Sun,
     Earth,
 }
-*/
+    
+#[inline]
+pub fn point_at(from : Point2<f32>, at : Point2<f32>) -> Option<Point2<f32>> {
+    use sys_api::graphics_init::SCREEN_WIDTH;
+
+    let v = at - from;
+    let x = (v.x / v.y.abs()).clamp(-SCREEN_WIDTH, SCREEN_WIDTH);
+    let y = (SCREEN_WIDTH * v.y / v.x.abs()).clamp(-1.0f32, 1.0f32);
+    let pointer_v = vec2(x, y);
+
+    if pointer_v.magnitude2() > v.magnitude2() { None }
+    else { Some(<Point2<f32> as EuclideanSpace>::from_vec(pointer_v)) }
+}
 
 struct DasherTraceData {
     direction : Vector2<f32>,
@@ -67,7 +78,7 @@ pub struct StateData {
     battlefield : Battlefield,
 
     timer : Duration,
-    //pointer_target : PointerTarget,
+    pointer_target : PointerTarget,
     dasher_trace_data : DasherTraceData,
     bullet_sys : BulletSystem,
 }
@@ -116,7 +127,7 @@ impl StateData {
                 player_dash_trace_texture,
 
                 timer : SPAWN_RATE,
-                //pointer_target : PointerTarget::None,
+                pointer_target : PointerTarget::None,
                 dasher_trace_data : DasherTraceData::new(),
                 bullet_sys : BulletSystem::new(),
                 battlefield,
@@ -155,11 +166,9 @@ impl StateData {
                             .map_or((), |x| dasher_trace_data.update(player.downgrade(), x))
                             // update the dash data
                         },
-                        /*
                         Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
                         Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
                         Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
-                        */
                         _ => (),
                     }
                 }
@@ -199,7 +208,7 @@ impl StateData {
 
         self.battlefield.update(dt);
         self.bullet_sys.update(&mut self.battlefield, dt);
-        self.battlefield.think(&mut self.bullet_sys);
+        self.battlefield.think(&mut self.bullet_sys, dt);
         
         if let Some(player) = self.battlefield.player_downcasted::<PlayerShip>() {
             ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);
@@ -247,7 +256,6 @@ impl StateData {
         self.battlefield.fill_buffer(&mut ctx.enemy_buffer);
         draw_instanced_sprite(ctx, &mut frame, &ctx.enemy_buffer, vp, &self.basic_enemy_ship_texture, Some(ctx.viewport()));
 
-        /*
         let pointer_target = 
             match self.pointer_target {
                 PointerTarget::None => None,
@@ -256,7 +264,15 @@ impl StateData {
             }
         ;
 
-        let pointer = pointer_target.and_then(|x| self.player.point_at(x));
+        let pointer = 
+            pointer_target
+            .and_then(
+                |x| 
+                self.battlefield
+                .player_downcasted::<PlayerShip>()
+                .and_then(|y| point_at(y.core.pos, x))
+            )
+        ;
 
         match pointer {
             Some(pointer) => {
@@ -265,7 +281,6 @@ impl StateData {
             },
             None => (),
         }
-        */
 
         const PLAYER_DASH_TRACE_SPEED : f32 = 0.6f32;
         // If we are doing the dash (player returns the dash parameter),

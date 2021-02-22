@@ -43,8 +43,9 @@ declare_ships!(
         dasher : PlayerDash[start=0],
         [guns]
         gun : TestGun,
-        [ai = no_ai::<PlayerShip>]
-        [sprite_size = (0.1f32, 0.1f32); spawn_hp = 3; collision = Player]
+        [ai = no_ai::<PlayerShip>; data = ()]
+        [sprite_size = (0.1f32, 0.1f32)]
+        [spawn_hp = 3; collision = Player]
     }
 );
 

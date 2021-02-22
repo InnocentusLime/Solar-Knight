@@ -4,7 +4,6 @@ pub mod core;
 pub mod collision_models;
 pub mod constants;
 
-// TODO improve downcasting facility
 #[macro_export]
 macro_rules! declare_ships {
     (
@@ -14,8 +13,9 @@ macro_rules! declare_ships {
             $( $engine_name:ident : $engine_type:ty[start = $start_expr : expr], )*
             [guns]
             $( $gun_name:ident : $gun_type:ty, )*
-            [ai = $ai_proc:expr]
-            [sprite_size = ($spr_x:expr, $spr_y:expr); spawn_hp = $spawn_hp:expr; collision = $collision:ident]
+            [ai = $ai_proc:expr; data = $ai_data:ty]
+            [sprite_size = ($spr_x:expr, $spr_y:expr)] 
+            [spawn_hp = $spawn_hp:expr; collision = $collision:ident]
         }
         )+
     ) => {
@@ -23,24 +23,35 @@ macro_rules! declare_ships {
             _layout : &mut T, 
             _core : &$crate::core::Core, 
             _others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
-            bullet_system : &mut $crate::gun::BulletSystem
+            _bullet_system : &mut $crate::gun::BulletSystem,
+            _dt : std::time::Duration,
         ) {}
         
         $(
             pub struct $name {
                 $( pub $engine_name : $engine_type, )*
                 $( pub $gun_name : $gun_type, )*
+                pub ai_data : $ai_data,
             }
 
             impl $name {
                 const SPRITE_SIZE : (f32, f32) = ($spr_x, $spr_y);
-                const AI_PROC : fn(&mut $name, &$crate::core::Core, &std_ext::ExtractResultMut<Ship<ShipLayout>>, &mut $crate::gun::BulletSystem) = $ai_proc;
+                const AI_PROC : 
+                    fn(
+                        &mut $name, 
+                        &$crate::core::Core, 
+                        &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
+                        &mut $crate::gun::BulletSystem, 
+                        std::time::Duration
+                    ) 
+                = $ai_proc;
 
                 #[inline]
                 pub fn new() -> Self {
                     $name {
                         $( $engine_name : <$engine_type>::new($start_expr), )*
                         $( $gun_name : <$gun_type>::new(), )*
+                        ai_data : <$ai_data>::default(),
                     }
                 }
 
@@ -55,8 +66,14 @@ macro_rules! declare_ships {
                 }
 
                 #[inline(always)]
-                pub fn think(&mut self, core : &$crate::core::Core, others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, bullet_system : &mut $crate::gun::BulletSystem) { 
-                    (Self::AI_PROC)(self, core, others, bullet_system) 
+                pub fn think(
+                    &mut self, 
+                    core : &$crate::core::Core, 
+                    others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
+                    bullet_system : &mut $crate::gun::BulletSystem,
+                    dt : std::time::Duration
+                ) { 
+                    (Self::AI_PROC)(self, core, others, bullet_system, dt) 
                 }
             }
         )+
@@ -76,10 +93,16 @@ macro_rules! declare_ships {
             }
             
             #[inline]
-            pub fn think(&mut self, core : &$crate::core::Core, others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, bullet_system : &mut $crate::gun::BulletSystem) {
+            pub fn think(
+                &mut self, 
+                core : &$crate::core::Core, 
+                others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
+                bullet_system : &mut $crate::gun::BulletSystem,
+                dt : std::time::Duration,
+            ) {
                 match self {
                 $(
-                    ShipLayout::$name(l) => l.think(core, others, bullet_system),
+                    ShipLayout::$name(l) => l.think(core, others, bullet_system, dt),
                 )+
                 }
             }
@@ -107,8 +130,13 @@ macro_rules! declare_ships {
             }
             
             #[inline]
-            pub fn think(&mut self, others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, bullet_system : &mut $crate::gun::BulletSystem) {
-                self.layout.think(&self.core, others, bullet_system)
+            pub fn think(
+                &mut self, 
+                others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
+                bullet_system : &mut $crate::gun::BulletSystem,
+                dt : std::time::Duration
+            ) {
+                self.layout.think(&self.core, others, bullet_system, dt)
             }
 
             pub fn sprite_size(&self) -> (f32, f32) {
@@ -191,14 +219,14 @@ macro_rules! declare_ships {
                 self.ships.retain(|x| x.core.hp() > 0);
             }
 
-            pub fn think(&mut self, bullet_system : &mut $crate::gun::BulletSystem) {
+            pub fn think(&mut self, bullet_system : &mut $crate::gun::BulletSystem, dt : std::time::Duration) {
                 use std_ext::*;
 
                 for i in 0..self.ships.len() {
                     let (extract, elem) = self.ships.as_mut_slice().extract_mut(i);
 
                     if elem.core.is_alive() {
-                        elem.think(&extract, bullet_system);
+                        elem.think(&extract, bullet_system, dt);
                     }
                 }
             }

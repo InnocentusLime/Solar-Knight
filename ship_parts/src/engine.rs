@@ -24,6 +24,7 @@ macro_rules! declare_engine {
             direction : ($dir_x:expr, $dir_y:expr), 
         }
     ) => {
+        #[derive(Clone, Copy)]
         pub struct $name {
             current_mul : u64,
         }
@@ -93,6 +94,7 @@ macro_rules! declare_engine {
         /// This is a soft engine, which means it's speed won't
         /// snap into a certain value but instead will slowly reach
         /// towards it.
+        #[derive(Clone, Copy)]
         pub struct $name {
             target_mul : u64,
             current_mul : f32,
@@ -194,6 +196,7 @@ macro_rules! declare_engine {
             max_lvl : $max_lvl:expr, 
         }
     ) => {
+        #[derive(Clone, Copy)]
         pub struct $name {
             current_mul : u64,
             pub direction : cgmath::Vector2<f32>,
@@ -249,6 +252,7 @@ macro_rules! declare_engine {
         /// This is a soft engine, which means it's speed won't
         /// snap into a certain value but instead will slowly reach
         /// towards it.
+        #[derive(Clone, Copy)]
         pub struct $name {
             target_mul : u64,
             current_mul : f32,

@@ -87,6 +87,7 @@ macro_rules! declare_gun (
             direction : $direction:expr,
         }
     ) => {
+        #[derive(Clone, Copy)]
         pub struct $name {
             timer : std::time::Duration,    
         }

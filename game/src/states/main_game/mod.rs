@@ -6,7 +6,7 @@ use glium::texture::texture2d::Texture2d;
 use glutin::event::{ VirtualKeyCode, MouseButton };
 
 use sys_api::basic_graphics_data::SpriteData;
-use ship_parts::{ gun::{ BulletSystem, TESTER_BULLET_SIZE }, core::Team };
+use ship_parts::{ BulletSystem, gun::{ TESTER_BULLET_SIZE }, Team, Ship, PlayerShip, Battlefield };
 use super::{ GameState, TransitionRequest };
 use std_ext::collections::memory_chunk::MemoryChunk;
 use std_ext::*;
@@ -59,7 +59,9 @@ impl DasherTraceData {
         }
     }
 
-    fn update(&mut self, player : ShipBorrow<PlayerShip>, dash_direction : Vector2<f32>) {
+    fn update(&mut self, player : &Ship<PlayerShip>, dash_direction : Vector2<f32>) {
+        use ship_parts::PlayerEngine;
+
         self.position = player.core.pos;
         self.direction = -(dash_direction + 0.7 * (player.layout.main_engine.get_speed() as f32 / PlayerEngine::MAX_LVL as f32) * player.core.direction);
     }
@@ -107,10 +109,9 @@ impl StateData {
 
         let mut battlefield = Battlefield::new();
 
-        use ships::Ship;
-        use ship_parts::collision_models::model_indices;
         use ship_parts::core::Team;
-        battlefield.spawn(Ship::player_ship(Team::Earth, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
+        use ship_parts::collision_models::model_indices;
+        battlefield.spawn(ship_parts::player_ship(Team::Earth, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
                 
         GameState::MainGame(
             StateData {
@@ -150,20 +151,20 @@ impl StateData {
                 ),
                 ..
             } => {
-                use self::ships::{ ShipDowncast, PlayerShip };
+                use ship_parts::PlayerShip;
                 let dasher_trace_data = &mut self.dasher_trace_data;
-                if let Some(mut player) = self.battlefield.player_downcasted_mut::<PlayerShip>() {
+                if let Some(mut player) = self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
                     match virtual_keycode {
                         Some(event::VirtualKeyCode::W) => player.increase_speed(),
                         Some(event::VirtualKeyCode::S) => player.decrease_speed(),
                         Some(event::VirtualKeyCode::D) => {
                             player.dash_right()
-                            .map_or((), |x| dasher_trace_data.update(player.downgrade(), x))
+                            .map_or((), |x| dasher_trace_data.update(player, x))
                             // update the dash data
                         },
                         Some(event::VirtualKeyCode::A) => {
                             player.dash_left()
-                            .map_or((), |x| dasher_trace_data.update(player.downgrade(), x))
+                            .map_or((), |x| dasher_trace_data.update(player, x))
                             // update the dash data
                         },
                         Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
@@ -189,13 +190,13 @@ impl StateData {
 
         if self.timer.my_is_zero() {
             self.timer = SPAWN_RATE;
-            self.battlefield.spawn(Ship::enemy_tester(Team::Hive, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
+            self.battlefield.spawn(ship_parts::enemy_tester(Team::Hive, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
         } else { // TODO introduce enemy limit
             self.timer = self.timer.my_saturating_sub(dt);
         }
 
-        use self::ships::PlayerShip;
-        if let Some(player) = self.battlefield.player_downcasted_mut::<PlayerShip>() {
+        use ship_parts::PlayerShip;
+        if let Some(player) = self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
             player.core.direction = input_tracker.mouse_position().normalize();
 
             if input_tracker.is_mouse_button_down(MouseButton::Left) {
@@ -207,8 +208,8 @@ impl StateData {
         self.battlefield.update(dt);
         self.bullet_sys.update(&mut self.battlefield, dt);
         self.battlefield.think(&mut self.bullet_sys, dt);
-        
-        if let Some(player) = self.battlefield.player_downcasted::<PlayerShip>() {
+       
+        if let Some(player) = self.battlefield.get_downcasted::<PlayerShip>(0) {
             ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);
         } else { panic!("No player!!"); }
          
@@ -267,7 +268,7 @@ impl StateData {
             .and_then(
                 |x| 
                 self.battlefield
-                .player_downcasted::<PlayerShip>()
+                .get_downcasted::<PlayerShip>(0)
                 .and_then(|y| point_at(y.core.pos, x))
             )
         ;
@@ -284,7 +285,7 @@ impl StateData {
         // If we are doing the dash (player returns the dash parameter),
         // draw the trace
         self.battlefield
-        .player_downcasted::<PlayerShip>()
+        .get_downcasted::<PlayerShip>(0)
         .and_then(|x| x.dash_trace_param())
         .map_or(
             (),

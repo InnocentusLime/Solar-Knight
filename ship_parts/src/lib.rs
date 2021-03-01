@@ -3,6 +3,21 @@ pub mod gun;
 pub mod core;
 pub mod collision_models;
 pub mod constants;
+pub mod storage_traits;
+
+pub use crate::core::Team;
+pub use crate::gun::BulletSystem;
+pub use crate::storage_traits::{ Ship, ShipLayout, SuperShipLayout, Battlefield as BattlefieldBase };       
+
+use cgmath::{ Point2, Vector2, vec2, point2 };
+
+fn no_ai<T>(
+    _me : &mut Ship<T>,
+    _others : &std_ext::ExtractResultMut<ShipObject>, 
+    _bullet_system : &mut crate::gun::BulletSystem,
+    _dt : std::time::Duration,
+) {}
+        
 
 #[macro_export]
 macro_rules! declare_ships {
@@ -19,15 +34,8 @@ macro_rules! declare_ships {
         }
         )+
     ) => {
-        fn no_ai<T>(
-            _layout : &mut T, 
-            _core : &mut $crate::core::Core, 
-            _others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
-            _bullet_system : &mut $crate::gun::BulletSystem,
-            _dt : std::time::Duration,
-        ) {}
-        
         $(
+            #[derive(Clone, Copy)]
             pub struct $name {
                 $( pub $engine_name : $engine_type, )*
                 $( pub $gun_name : $gun_type, )*
@@ -36,15 +44,6 @@ macro_rules! declare_ships {
 
             impl $name {
                 const SPRITE_SIZE : (f32, f32) = ($spr_x, $spr_y);
-                const AI_PROC : 
-                    fn(
-                        &mut $name, 
-                        &mut $crate::core::Core, 
-                        &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
-                        &mut $crate::gun::BulletSystem, 
-                        std::time::Duration
-                    ) 
-                = $ai_proc;
 
                 #[inline]
                 pub fn new() -> Self {
@@ -54,271 +53,174 @@ macro_rules! declare_ships {
                         ai_data : <$ai_data>::default(),
                     }
                 }
+            }
 
+            impl ShipLayout<ShipLayoutUnion> for $name {
                 #[inline]
-                pub fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
+                fn update(me : &mut Ship<$name>, dt : std::time::Duration) {
                     $(
-                        self.$engine_name.update(core, dt);
+                        me.layout.$engine_name.update(&mut me.core, dt);
                     )*
                     $(
-                        self.$gun_name.update(dt);
+                        me.layout.$gun_name.update(dt);
                     )*
                 }
 
-                #[inline(always)]
-                pub fn think(
-                    &mut self, 
-                    core : &mut $crate::core::Core, 
-                    others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
-                    bullet_system : &mut $crate::gun::BulletSystem,
-                    dt : std::time::Duration
-                ) { 
-                    (Self::AI_PROC)(self, core, others, bullet_system, dt) 
-                }
+                fn sprite_size() -> (f32, f32) { Self::SPRITE_SIZE }
+            }
+            
+            pub fn $con(team : Team, pos : cgmath::Point2<f32>, dir : cgmath::Vector2<f32>) -> ShipObject {
+                Ship::new(
+                    $name::new(), 
+                    crate::core::Core::new(
+                        $spawn_hp, 
+                        crate::collision_models::model_indices::CollisionModelIndex::$collision, 
+                        team, pos, dir
+                    ),
+                    $ai_proc
+                )
             }
         )+
 
-        pub enum ShipLayout {
-            $( $name($name), )+
+        pub union ShipLayoutUnion {
+            $( $con : $name, )+
         }
 
-        impl ShipLayout {
-            #[inline]
-            pub fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
-                match self {
-                $(
-                    ShipLayout::$name(l) => l.update(core, dt),
-                )+
-                }
-            }
-            
-            #[inline]
-            pub fn think(
-                &mut self, 
-                core : &mut $crate::core::Core, 
-                others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
-                bullet_system : &mut $crate::gun::BulletSystem,
-                dt : std::time::Duration,
-            ) {
-                match self {
-                $(
-                    ShipLayout::$name(l) => l.think(core, others, bullet_system, dt),
-                )+
+        unsafe impl SuperShipLayout for ShipLayoutUnion {
+            fn upcast<T : ShipLayout<Self>>(x : T) -> Self {
+                use std::mem;
+
+                unsafe {
+                    let mut res = mem::MaybeUninit::zeroed();
+                    (&x as *const T).copy_to_nonoverlapping(res.as_mut_ptr() as *mut T, 1);
+                    res.assume_init()
                 }
             }
         }
 
-        pub struct Ship<S> {
-            pub core : $crate::core::Core,
-            pub layout : S,
-        }
-
-        impl Ship<ShipLayout> {
-            $(
-            #[inline]
-            pub fn $con(team : $crate::core::Team, pos : cgmath::Point2<f32>, dir : cgmath::Vector2<f32>) -> Ship<ShipLayout> {
-                Ship {
-                    layout : ShipLayout::$name($name::new()),
-                    core : $crate::core::Core::new($spawn_hp, $crate::collision_models::model_indices::CollisionModelIndex::$collision, team, pos, dir),
-                }
-            }
-            )+
-
-            #[inline]
-            pub fn update(&mut self, dt : std::time::Duration) {
-                self.layout.update(&mut self.core, dt)
-            }
-            
-            #[inline]
-            pub fn think(
-                &mut self, 
-                others : &std_ext::ExtractResultMut<Ship<ShipLayout>>, 
-                bullet_system : &mut $crate::gun::BulletSystem,
-                dt : std::time::Duration
-            ) {
-                self.layout.think(&mut self.core, others, bullet_system, dt)
-            }
-
-            pub fn sprite_size(&self) -> (f32, f32) {
-                match self.layout {
-                $(
-                    ShipLayout::$name(_) => $name::SPRITE_SIZE,
-                )+
-                }
-            }
-
-            #[inline]
-            pub fn model_mat(&self) -> cgmath::Matrix4<f32> {       
-                use cgmath::{ Matrix4, EuclideanSpace };
-
-                let size = self.sprite_size();
-
-                Matrix4::from_translation(self.core.pos.to_vec().extend(0.0f32)) * 
-                Matrix4::new(
-                    self.core.direction.y, -self.core.direction.x, 0.0f32, 0.0f32,
-                    self.core.direction.x, self.core.direction.y, 0.0f32, 0.0f32,
-                    0.0f32, 0.0f32, 1.0f32, 0.0f32,
-                    0.0f32, 0.0f32, 0.0f32, 1.0f32,
-                ) * 
-                Matrix4::from_nonuniform_scale(size.0, size.1, 1.0f32)
-            }
-        }
-
-        pub struct Battlefield {
-            ships : std_ext::collections::MemoryChunk<Ship<ShipLayout>>,
-        }
-
-        impl Battlefield {
-            pub fn new() -> Self {
-                use sys_api::graphics_init::ENEMY_LIMIT;
-
-                Battlefield {
-                    ships : std_ext::collections::MemoryChunk::with_capacity(ENEMY_LIMIT),
-                }
-            }
-
-            pub fn spawn(&mut self, ship : Ship<ShipLayout>) {
-                self.ships.push(ship);
-            }
-            
-            #[inline]
-            pub fn player_mut(&mut self) -> Option<&mut Ship<ShipLayout>> {
-                self.ships.as_mut_slice().first_mut()
-            }
-            
-            #[inline]
-            pub fn player_downcasted_mut<S>(&mut self) -> Option<ShipBorrowMut<S>> 
-            where
-                Ship<ShipLayout> : ShipDowncast<S>,
-            {
-                self.ships.as_mut_slice()
-                .first_mut()
-                .and_then(|x| x.downcast_mut())
-            }
-
-            #[inline]
-            pub fn player(&self) -> Option<&Ship<ShipLayout>> {
-                self.ships.as_slice().first()
-            }
-            
-            #[inline]
-            pub fn player_downcasted<S>(&self) -> Option<ShipBorrow<S>> 
-            where
-                Ship<ShipLayout> : ShipDowncast<S>,
-            {
-                self.ships.as_slice()
-                .first()
-                .and_then(|x| x.downcast())
-            }
-
-            pub fn update(&mut self, dt : std::time::Duration) {
-                self.ships
-                .iter_mut()
-                .for_each(|x| x.update(dt));
-
-                self.ships.retain(|x| x.core.hp() > 0);
-            }
-
-            pub fn think(&mut self, bullet_system : &mut $crate::gun::BulletSystem, dt : std::time::Duration) {
-                use std_ext::*;
-
-                for i in 0..self.ships.len() {
-                    let (extract, elem) = self.ships.as_mut_slice().extract_mut(i);
-
-                    if elem.core.is_alive() {
-                        elem.think(&extract, bullet_system, dt);
-                    }
-                }
-            }
-
-            pub fn fill_buffer(&self, buff : &mut glium::VertexBuffer<sys_api::basic_graphics_data::SpriteData>) {
-                use sys_api::graphics_init::ENEMY_LIMIT;
-                
-                let mut ptr = buff.map_write();
-
-                if ptr.len() < ENEMY_LIMIT { panic!("Buffer too small"); }
-
-                for i in 0..ptr.len() { 
-                    use sys_api::basic_graphics_data::ZEROED_SPRITE_DATA;
-            
-                    ptr.set(i, ZEROED_SPRITE_DATA);
-                }
-
-                self.ships.iter()
-                .enumerate()
-                .for_each(|(i, x)| {
-                    let m = x.model_mat();
-            
-                    let dat =
-                        sys_api::basic_graphics_data::SpriteData {
-                            mat_col1 : m.x.into(),
-                            mat_col2 : m.y.into(),
-                            mat_col3 : m.z.into(),
-                            mat_col4 : m.w.into(),
-                            texture_bottom_left : [0.0f32, 0.0f32],
-                            texture_top_right : [1.0f32, 1.0f32],
-                        }
-                    ;
-            
-                    ptr.set(i, dat);
-                });
-            }
-        }
-
-        use std::slice::IterMut;
-        use std::iter::Map;
-        impl<'a> $crate::gun::TargetSystem<'a> for Battlefield {
-            type Iter = Map<IterMut<'a, Ship<ShipLayout>>, fn(&mut Ship<ShipLayout>) -> &mut $crate::core::Core>;
-
-            fn entity_iterator(&'a mut self) -> Self::Iter {
-                self.ships.iter_mut().map(|x| &mut x.core)
-            }
-        }
-
-        #[derive(Clone, Copy)]
-        pub struct ShipBorrow<'a, S> {
-            pub core : &'a $crate::core::Core,
-            pub layout : &'a S,
-        }
-        
-        pub struct ShipBorrowMut<'a, S> {
-            pub core : &'a mut $crate::core::Core,
-            pub layout : &'a mut S,
-        }
-
-        impl<'a, S> ShipBorrowMut<'a, S> {
-            #[inline]
-            pub fn downgrade(&self) -> ShipBorrow<S> {
-                ShipBorrow {
-                    core : &*self.core,
-                    layout : &*self.layout,
-                }
-            }
-        }
-
-        pub trait ShipDowncast<S> {
-            fn downcast(&self) -> Option<ShipBorrow<S>>;
-            fn downcast_mut(&mut self) -> Option<ShipBorrowMut<S>>;
-        }
-
-        $(
-        impl ShipDowncast<$name> for Ship<ShipLayout> {
-            #[inline]
-            fn downcast(&self) -> Option<ShipBorrow<$name>> {
-                match &self.layout {
-                    ShipLayout::$name(layout) => Some(ShipBorrow { core : &self.core, layout }),
-                    _ => None,
-                }
-            }
-            
-            #[inline]
-            fn downcast_mut(&mut self) -> Option<ShipBorrowMut<$name>> {
-                match &mut self.layout {
-                    ShipLayout::$name(layout) => Some(ShipBorrowMut { core : &mut self.core, layout }),
-                    _ => None,
-                }
-            }
-        }
-        )+
+        pub type ShipObject = Ship<ShipLayoutUnion>;
+        pub type Battlefield = BattlefieldBase<ShipLayoutUnion>;
     };
+}
+
+declare_engine!(
+    snappy_engine TesterEngine { 
+        speed_mul : 0.06f32, 
+        max_lvl : 1, 
+        direction : (0.0f32, 1.0f32),
+    }
+);
+
+declare_gun!(
+    inf_gun TestGun {
+        offset : cgmath::vec2(0.0f32, 0.0f32),
+        bullet_kind : tester_bullet,
+        recoil : std::time::Duration::from_millis(133),
+        direction : cgmath::vec2(0.0f32, 1.0f32),
+    }
+);
+
+declare_engine!(
+    snappy_engine PlayerEngine { 
+        speed_mul : 0.5f32, 
+        max_lvl : 4, 
+        direction : (0.0f32, 1.0f32),
+    }
+);
+
+declare_engine!(
+    snappy_engine TesterEnemyEngine { 
+        speed_mul : 0.06f32, 
+        max_lvl : 1, 
+        direction : (0.0f32, 1.0f32),
+    }
+);
+
+declare_engine!(
+    directed_soft_engine PlayerDash {
+        speed_mul : 6.0f32,
+        max_lvl : 1,
+        one_step_duration : std::time::Duration::from_millis(180),
+        change_curve : exponential_decrease_curve!(std::f32::consts::E / 2.1f32),
+    }
+);
+
+pub fn enemy_tester_ai(
+    me : &mut Ship<EnemyTester>,
+    others : &std_ext::ExtractResultMut<ShipObject>, 
+    _bullet_system : &mut BulletSystem,
+    _dt : std::time::Duration,
+) {
+    use cgmath::InnerSpace;
+    let player = &others[0];
+    me.core.direction = (player.core.pos - me.core.pos).normalize(); 
+}
+
+declare_ships!(
+    ship PlayerShip (player_ship) {
+        [engines]
+        main_engine : PlayerEngine[start=0],
+        dasher : PlayerDash[start=0],
+        [guns]
+        gun : TestGun,
+        [ai = no_ai::<PlayerShip>; data = ()]
+        [sprite_size = (0.1f32, 0.1f32)]
+        [spawn_hp = 3; collision = Player]
+    }
+
+    ship EnemyTester (enemy_tester) {
+        [engines]
+        main_engine : TesterEnemyEngine[start=1],
+        [guns]
+        [ai = enemy_tester_ai; data = ()]
+        [sprite_size = (0.1f32, 0.1f32)]
+        [spawn_hp = 3; collision = EnemyTester]
+    }
+);
+
+// Shortcut-controls for player's layout
+impl Ship<PlayerShip> {
+    #[inline]
+    pub fn increase_speed(&mut self) { self.layout.main_engine.increase_speed() }
+    
+    #[inline]
+    pub fn decrease_speed(&mut self) { self.layout.main_engine.decrease_speed() }
+
+    #[inline]
+    pub fn is_dashing(&self) -> bool {
+        self.layout.dasher.is_changing()
+    }
+
+    pub fn dash_right(&mut self) -> Option<Vector2<f32>> {
+        if !self.is_dashing() {
+            // Check `dash_left` for info about how it works
+            let direction = cgmath_ext::rotate_vector_ox(self.core.direction, vec2(0.0f32, -1.0f32));
+            self.layout.dasher.direction = direction;
+            self.layout.dasher.snap(1);
+            self.layout.dasher.decrease_speed();
+            // return the dash direction
+            Some(direction)
+        } else { None }
+    }
+    
+    pub fn dash_left(&mut self) -> Option<Vector2<f32>> {
+        if !self.is_dashing() {
+            // This code will make the engine
+            // update all its interior data to be `1`.
+            // We'll then call `decrease_speed` to make engine's
+            // speed decrease from 1 to 0.
+            let direction = cgmath_ext::rotate_vector_ox(self.core.direction, vec2(0.0f32, 1.0f32));
+            self.layout.dasher.direction = direction;
+            self.layout.dasher.snap(1);
+            self.layout.dasher.decrease_speed();
+            // return the dash direction
+            Some(direction)
+        } else { None }
+    }
+    
+    #[inline]
+    pub fn dash_trace_param(&self) -> Option<f32> {
+        if self.is_dashing() { Some(self.layout.dasher.get_speed()) }
+        else { None }
+    }
 }

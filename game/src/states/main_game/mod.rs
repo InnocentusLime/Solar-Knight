@@ -24,7 +24,7 @@ use ships::*;
 //use player::*;
 //use enemies::{ Hive, Enemy, tester::Tester };
 
-const SPAWN_RATE : Duration = Duration::from_secs(3);
+const SPAWN_RATE : Duration = Duration::from_secs(20);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum PointerTarget {

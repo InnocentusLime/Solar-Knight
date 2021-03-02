@@ -113,6 +113,15 @@ declare_gun!(
     }
 );
 
+declare_gun!(
+    inf_gun TesterEnemyGun {
+        offset : cgmath::vec2(0.0f32, 0.0f32),
+        bullet_kind : tester_bullet,
+        recoil : std::time::Duration::from_secs(2),
+        direction : cgmath::vec2(0.0f32, 1.0f32),
+    }
+);
+
 declare_engine!(
     snappy_engine PlayerEngine { 
         speed_mul : 0.5f32, 
@@ -141,12 +150,18 @@ declare_engine!(
 pub fn enemy_tester_ai(
     me : &mut Ship<EnemyTester>,
     others : &std_ext::ExtractResultMut<ShipObject>, 
-    _bullet_system : &mut BulletSystem,
+    bullet_system : &mut BulletSystem,
     _dt : std::time::Duration,
 ) {
     use cgmath::InnerSpace;
     let player = &others[0];
-    me.core.direction = (player.core.pos - me.core.pos).normalize(); 
+    let me_player_vec = (player.core.pos - me.core.pos);
+    me.core.direction = me_player_vec.normalize(); 
+
+    if me_player_vec.magnitude() <= 4.0f32 {
+        me.layout.gun.shoot(&me.core)
+        .map_or((), |x| bullet_system.spawn(x))
+    }
 }
 
 declare_ships!(
@@ -161,6 +176,7 @@ declare_ships!(
 
     ship EnemyTester (enemy_tester) {
         main_engine : TesterEnemyEngine[1],
+        gun : TesterEnemyGun[],
         [ai = enemy_tester_ai; data = ()]
         [sprite_size = (0.1f32, 0.1f32)]
         [spawn_hp = 3; collision = EnemyTester]

@@ -7,7 +7,7 @@ use glutin::event::{ VirtualKeyCode, MouseButton };
 
 use sys_api::basic_graphics_data::SpriteData;
 use ship_parts::{ BulletSystem, gun::{ TESTER_BULLET_SIZE }, Team, Ship, PlayerShip, Battlefield };
-use super::{ GameState, TransitionRequest };
+use super::{ GameState, TransitionRequest, main_menu };
 use std_ext::collections::memory_chunk::MemoryChunk;
 use std_ext::*;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext, ENEMY_LIMIT, PLAYER_BULLET_LIMIT };
@@ -185,6 +185,12 @@ impl StateData {
         use cgmath::{ Transform, Angle, InnerSpace, Matrix4 };
 
         use std::ops::{ Add, Sub };
+        use ship_parts::PlayerShip;
+
+        if let Some(player) = self.battlefield.get(0) {
+            assert!(player.core.team() == Team::Earth);
+            if !player.core.is_alive() { return Some(Box::new(main_menu::StateData::init)); }
+        } else { panic!("No player!"); }
 
         self.earth.update(dt);
 
@@ -195,7 +201,6 @@ impl StateData {
             self.timer = self.timer.my_saturating_sub(dt);
         }
 
-        use ship_parts::PlayerShip;
         if let Some(player) = self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
             player.core.direction = input_tracker.mouse_position().normalize();
 

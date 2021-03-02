@@ -1,7 +1,7 @@
 use std::any::{ Any, TypeId };
 use std::time::Duration;
 
-use crate::core::Core;
+use crate::core::{ Core, Team };
 use crate::gun::{ BulletSystem, TargetSystem };
 
 use std_ext::{ ExtractResultMut, SliceExt };
@@ -144,7 +144,7 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
         self.mem.iter_mut()
         .for_each(|c| (c.update)(c, dt));
 
-        self.mem.retain(|x| x.core.hp() > 0);
+        self.mem.retain(|x| x.core.is_alive() || x.core.team() == Team::Earth);
     }
             
     pub fn think(&mut self, bullet_system : &mut BulletSystem, dt : Duration) {

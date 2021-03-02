@@ -136,8 +136,10 @@ macro_rules! declare_gun (
                     )
                 } else { None }
             }
+        }
 
-            pub fn update(&mut self, dt : std::time::Duration) {
+        impl crate::part_trait::ShipPart for $name {
+            fn update(&mut self, _core : &mut crate::core::Core, dt : std::time::Duration) {
                 use std_ext::*;
                 
                 self.timer = self.timer.my_saturating_sub(dt);

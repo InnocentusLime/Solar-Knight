@@ -4,6 +4,9 @@ pub mod core;
 pub mod collision_models;
 pub mod constants;
 pub mod storage_traits;
+pub mod part_trait;
+
+use crate::part_trait::ShipPart;
 
 pub use crate::core::Team;
 pub use crate::gun::BulletSystem;
@@ -24,10 +27,7 @@ macro_rules! declare_ships {
     (
         $(
         ship $name:ident ($con:ident) {
-            [engines]
-            $( $engine_name:ident : $engine_type:ty[start = $start_expr : expr], )*
-            [guns]
-            $( $gun_name:ident : $gun_type:ty, )*
+            $($part_name:ident : $part_type:ty[$($arg:expr),*],)+
             [ai = $ai_proc:expr; data = $ai_data:ty]
             [sprite_size = ($spr_x:expr, $spr_y:expr)] 
             [spawn_hp = $spawn_hp:expr; collision = $collision:ident]
@@ -37,8 +37,7 @@ macro_rules! declare_ships {
         $(
             #[derive(Clone, Copy)]
             pub struct $name {
-                $( pub $engine_name : $engine_type, )*
-                $( pub $gun_name : $gun_type, )*
+                $( pub $part_name : $part_type, )*
                 pub ai_data : $ai_data,
             }
 
@@ -48,8 +47,7 @@ macro_rules! declare_ships {
                 #[inline]
                 pub fn new() -> Self {
                     $name {
-                        $( $engine_name : <$engine_type>::new($start_expr), )*
-                        $( $gun_name : <$gun_type>::new(), )*
+                        $( $part_name : <$part_type>::new($($arg),*), )+
                         ai_data : <$ai_data>::default(),
                     }
                 }
@@ -58,12 +56,7 @@ macro_rules! declare_ships {
             impl ShipLayout<ShipLayoutUnion> for $name {
                 #[inline]
                 fn update(me : &mut Ship<$name>, dt : std::time::Duration) {
-                    $(
-                        me.layout.$engine_name.update(&mut me.core, dt);
-                    )*
-                    $(
-                        me.layout.$gun_name.update(dt);
-                    )*
+                    $(me.layout.$part_name.update(&mut me.core, dt);)+
                 }
 
                 fn sprite_size() -> (f32, f32) { Self::SPRITE_SIZE }
@@ -158,20 +151,16 @@ pub fn enemy_tester_ai(
 
 declare_ships!(
     ship PlayerShip (player_ship) {
-        [engines]
-        main_engine : PlayerEngine[start=0],
-        dasher : PlayerDash[start=0],
-        [guns]
-        gun : TestGun,
+        main_engine : PlayerEngine[0],
+        dasher : PlayerDash[0],
+        gun : TestGun[],
         [ai = no_ai::<PlayerShip>; data = ()]
         [sprite_size = (0.1f32, 0.1f32)]
         [spawn_hp = 3; collision = Player]
     }
 
     ship EnemyTester (enemy_tester) {
-        [engines]
-        main_engine : TesterEnemyEngine[start=1],
-        [guns]
+        main_engine : TesterEnemyEngine[1],
         [ai = enemy_tester_ai; data = ()]
         [sprite_size = (0.1f32, 0.1f32)]
         [spawn_hp = 3; collision = EnemyTester]

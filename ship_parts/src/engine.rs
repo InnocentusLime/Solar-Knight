@@ -71,9 +71,11 @@ macro_rules! declare_engine {
                     -Self::DIRECTION.x * direction.x + Self::DIRECTION.y * direction.y,
                 )
             }
+        }
 
+        impl crate::part_trait::ShipPart for $name {
             #[inline]
-            pub fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
+            fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
                 use cgmath::InnerSpace;
                 use $crate::constants::VECTOR_NORMALIZATION_RANGE;
                 
@@ -163,11 +165,13 @@ macro_rules! declare_engine {
                     -Self::DIRECTION.x * direction.x + Self::DIRECTION.y * direction.y,
                 )
             }
+        }
 
+        impl crate::part_trait::ShipPart for $name {
             /// Applies the engine power on a point.
             /// `direction` encodes the direction which the ship is pointing in.
             #[inline]
-            pub fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
+            fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
                 use cgmath::{ InnerSpace, vec2 };
                 
                 use std_ext::*;
@@ -230,9 +234,11 @@ macro_rules! declare_engine {
             pub fn decrease_speed(&mut self) {
                 self.current_mul = self.current_mul.saturating_sub(1); 
             }
-            
+        }
+
+        impl crate::part_trait::ShipPart for $name {    
             #[inline]
-            pub fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
+            fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
                 use cgmath::{ InnerSpace };
                 use $crate::constants::VECTOR_NORMALIZATION_RANGE;
                 
@@ -308,11 +314,13 @@ macro_rules! declare_engine {
 
                 !self.time.my_is_zero() 
             }
+        }
 
+        impl crate::part_trait::ShipPart for $name {
             /// Applies the engine power on a point.
             /// `direction` encodes the direction which the ship is pointing in.
             #[inline]
-            pub fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
+            fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
                 use cgmath::{ InnerSpace, vec2 };
                 use std_ext::*;
                 use $crate::constants::VECTOR_NORMALIZATION_RANGE;

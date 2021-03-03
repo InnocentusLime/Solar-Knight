@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 cgmath = "0.18.0"
-glium = "*"
+glium = "0.29.0"
 
 std_ext = { path = "../std_ext" }
 collision = { path = "../collision" }

@@ -216,10 +216,10 @@ impl BulletSystem {
                             let target_aabb = target_body.aabb();
             
                             if 
+                                target.team() != bullet.team &&
                                 target.hp() > 0 && 
                                 target_aabb.collision_test(my_aabb) && 
-                                target_body.check_collision(&my_body) &&
-                                target.team() != bullet.team
+                                target_body.check_collision(&my_body)
                             {
                                 target.damage(1);
                                 bullet.lifetime = <Duration as DurationExt>::my_zero();

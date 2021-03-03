@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use glium::glutin;
 use glium::texture::texture2d::Texture2d;
 
 use super::{ GameState, TransitionRequest }; 

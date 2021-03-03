@@ -8,6 +8,7 @@ use std::time::{ Duration, Instant };
 use std::error::Error as StdError;
 
 use log::trace;
+use glium::glutin;
 use simplelog::*;
 
 use sys_api::input_tracker::InputTracker;

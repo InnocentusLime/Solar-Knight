@@ -1,5 +1,6 @@
 use std::error::Error as StdError;
 
+use glium::glutin;
 use glium::texture::texture2d::Texture2d;
 use glium::{ Display, VertexBuffer, Program, Rect };
 use glutin::dpi::{ Size, LogicalSize, PhysicalSize };

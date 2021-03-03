@@ -4,6 +4,8 @@ use super::{ GameState, TransitionRequest };
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
 
+use glium::glutin;
+
 const SLEEP_FRAMES : u64 = 100;
 
 pub struct StateData {

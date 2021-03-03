@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use log::{ trace, info, warn };
 use cgmath::{ EuclideanSpace, InnerSpace, One, Rad, Angle, Vector2, Point2, vec2, point2 };
+use glium::glutin;
 use glium::texture::texture2d::Texture2d;
 use glutin::event::{ VirtualKeyCode, MouseButton };
 

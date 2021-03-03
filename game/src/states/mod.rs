@@ -1,6 +1,8 @@
 use std::time::Duration;
 use std::error::Error as StdError;
 
+use glium::glutin;
+
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
 

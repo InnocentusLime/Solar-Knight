@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 cgmath = "0.18.0"
 glium = "0.29.0"
-glutin = "0.26.0"
 log = "*"
 image = "*"
 

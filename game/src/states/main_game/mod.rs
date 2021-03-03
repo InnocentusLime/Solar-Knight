@@ -154,25 +154,28 @@ impl StateData {
             } => {
                 use ship_parts::PlayerShip;
                 let dasher_trace_data = &mut self.dasher_trace_data;
-                if let Some(mut player) = self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
-                    match virtual_keycode {
-                        Some(event::VirtualKeyCode::W) => player.increase_speed(),
-                        Some(event::VirtualKeyCode::S) => player.decrease_speed(),
-                        Some(event::VirtualKeyCode::D) => {
-                            player.dash_right()
-                            .map_or((), |x| dasher_trace_data.update(player, x))
-                            // update the dash data
-                        },
-                        Some(event::VirtualKeyCode::A) => {
-                            player.dash_left()
-                            .map_or((), |x| dasher_trace_data.update(player, x))
-                            // update the dash data
-                        },
-                        Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
-                        Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
-                        Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
-                        _ => (),
-                    }
+                match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
+                    Some(mut player) if player.core.is_alive() => {
+                        match virtual_keycode {
+                            Some(event::VirtualKeyCode::W) => player.increase_speed(),
+                            Some(event::VirtualKeyCode::S) => player.decrease_speed(),
+                            Some(event::VirtualKeyCode::D) => {
+                                player.dash_right()
+                                .map_or((), |x| dasher_trace_data.update(player, x))
+                                // update the dash data
+                            },
+                            Some(event::VirtualKeyCode::A) => {
+                                player.dash_left()
+                                .map_or((), |x| dasher_trace_data.update(player, x))
+                                // update the dash data
+                            },
+                            Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
+                            Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
+                            Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
+                            _ => (),
+                        }
+                    },
+                    _ => (),
                 }
             },
             _ => (),
@@ -202,14 +205,17 @@ impl StateData {
             self.timer = self.timer.my_saturating_sub(dt);
         }
 
-        if let Some(player) = self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
-            player.core.direction = input_tracker.mouse_position().normalize();
-
-            if input_tracker.is_mouse_button_down(MouseButton::Left) {
-                player.layout.gun.shoot(&player.core)
-                .map_or((), |x| self.bullet_sys.spawn(x));
-            }
-        } else { panic!("No player!!"); }
+        match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
+            Some(player) if player.core.is_alive() => {
+                player.core.direction = input_tracker.mouse_position().normalize();
+        
+                if input_tracker.is_mouse_button_down(MouseButton::Left) {
+                    player.layout.gun.shoot(&player.core)
+                    .map_or((), |x| self.bullet_sys.spawn(x));
+                }
+            },
+            _ => (),
+        }
 
         self.battlefield.update(dt);
         self.bullet_sys.update(&mut self.battlefield, dt);

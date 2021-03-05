@@ -1,6 +1,7 @@
 pub mod engine;
 pub mod gun;
 pub mod core;
+pub mod earth;
 pub mod collision_models;
 pub mod constants;
 pub mod storage_traits;
@@ -9,6 +10,7 @@ pub mod part_trait;
 use crate::part_trait::ShipPart;
 
 pub use crate::core::Team;
+pub use crate::earth::Earth;
 pub use crate::gun::BulletSystem;
 pub use crate::storage_traits::{ Ship, ShipLayout, SuperShipLayout, Battlefield as BattlefieldBase };       
 
@@ -18,6 +20,7 @@ fn no_ai<T>(
     _me : &mut Ship<T>,
     _others : &std_ext::ExtractResultMut<ShipObject>, 
     _bullet_system : &mut crate::gun::BulletSystem,
+    _earth : &Earth,
     _dt : std::time::Duration,
 ) {}
         
@@ -101,6 +104,14 @@ declare_engine!(
     }
 );
 
+declare_engine!(
+    snappy_engine BruteEngine { 
+        speed_mul : 0.06f32, 
+        max_lvl : 1, 
+        direction : (0.0f32, 1.0f32),
+    }
+);
+
 declare_gun!(
     inf_gun TestGun {
         offset : cgmath::vec2(0.0f32, 0.0f32),
@@ -114,6 +125,15 @@ declare_gun!(
     inf_gun TesterEnemyGun {
         offset : cgmath::vec2(0.0f32, 0.0f32),
         bullet_kind : tester_bullet,
+        recoil : std::time::Duration::from_secs(2),
+        direction : cgmath::vec2(0.0f32, 1.0f32),
+    }
+);
+
+declare_gun!(
+    inf_gun LaserBallGun {
+        offset : cgmath::vec2(0.0f32, 0.0f32),
+        bullet_kind : laser_ball,
         recoil : std::time::Duration::from_secs(2),
         direction : cgmath::vec2(0.0f32, 1.0f32),
     }
@@ -171,6 +191,7 @@ pub fn enemy_tester_ai(
     me : &mut Ship<EnemyTester>,
     others : &std_ext::ExtractResultMut<ShipObject>, 
     bullet_system : &mut BulletSystem,
+    _earth : &Earth,
     _dt : std::time::Duration,
 ) {
     use cgmath::InnerSpace;
@@ -181,6 +202,26 @@ pub fn enemy_tester_ai(
     if me_player_vec.magnitude() <= 4.0f32 {
         me.layout.gun.shoot(&me.core)
         .map_or((), |x| bullet_system.spawn(x))
+    }
+}
+
+pub fn enemy_brute_ai(
+    me : &mut Ship<EnemyBrute>,
+    others : &std_ext::ExtractResultMut<ShipObject>, 
+    bullet_system : &mut BulletSystem,
+    earth : &Earth,
+    _dt : std::time::Duration,
+) {
+    use cgmath::InnerSpace;
+    let player = &others[0];
+    let me_player_vec = (player.core.pos - me.core.pos);
+
+    if me_player_vec.magnitude() <= 4.0f32 {
+        // FIXME too hacky, rework with `directed gun`
+        me.core.direction = me_player_vec.normalize(); 
+        me.layout.gun.shoot(&me.core)
+        .map_or((), |x| bullet_system.spawn(x));
+        me.core.direction = (earth.pos() - me.core.pos).normalize();
     }
 }
 
@@ -200,6 +241,14 @@ declare_ships!(
         [ai = enemy_tester_ai; data = ()]
         [render = test_render::<EnemyTester>]
         [spawn_hp = 3; collision = EnemyTester]
+    }
+
+    ship EnemyBrute (enemy_brute) {
+        main_engine : BruteEngine[1],
+        gun : LaserBallGun[],
+        [ai = enemy_brute_ai; data = ()]
+        [render = test_render::<EnemyBrute>]
+        [spawn_hp = 3; collision = Player]
     }
 );
 

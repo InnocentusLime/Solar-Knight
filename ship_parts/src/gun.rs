@@ -18,6 +18,7 @@ pub const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
 #[derive(Clone, Copy, Debug)]
 pub enum BulletKind {
     TestBullet,
+    LaserBall,
 //  HomingBullet(target),
 }
 
@@ -34,6 +35,7 @@ impl Bullet {
     pub fn size(&self) -> (f32, f32) {
         match self.kind {
             BulletKind::TestBullet => (0.06f32, 0.09f32),
+            BulletKind::LaserBall => (0.03f32, 0.03f32),
         }
     }
 
@@ -75,8 +77,24 @@ impl Bullet {
             lifetime : Duration::from_secs(3),
         }
     }
+    
+    #[inline]
+    pub fn laser_ball(
+        pos : Point2<f32>, 
+        direction : Vector2<f32>,
+        team : Team,
+    ) -> Bullet {
+        Bullet {
+            pos,
+            team,
+            direction,
+            kind : BulletKind::LaserBall,
+            lifetime : Duration::from_secs(3),
+        }
+    }
 }
 
+// TODO directed gun (ammo_gun is actually needed too)
 #[macro_export]
 macro_rules! declare_gun (
     (
@@ -226,6 +244,29 @@ impl BulletSystem {
                             } 
                         }
                     },        
+                    BulletKind::LaserBall => {
+                        bullet.pos += (0.7f32 * dt.as_secs_f32()) * bullet.direction;
+        
+                        let my_body = collision_models::consts::LaserBall.apply_transform(&bullet.transform());
+                        let my_aabb = my_body.aabb();
+
+                        for target in c.entity_iterator() {                
+                            if bullet.lifetime.my_is_zero() { break }
+
+                            let target_body = target.phys_body();
+                            let target_aabb = target_body.aabb();
+            
+                            if 
+                                target.team() != bullet.team &&
+                                target.hp() > 0 && 
+                                target_aabb.collision_test(my_aabb) && 
+                                target_body.check_collision(&my_body)
+                            {
+                                target.damage(1);
+                                bullet.lifetime = <Duration as DurationExt>::my_zero();
+                            } 
+                        }
+                    },        
                 }
             } 
         );
@@ -236,6 +277,7 @@ impl BulletSystem {
                 // for the bullet to live
                 match bullet.kind {
                     BulletKind::TestBullet => !bullet.lifetime.my_is_zero(),
+                    BulletKind::LaserBall => !bullet.lifetime.my_is_zero(),
                 }
             }
         );

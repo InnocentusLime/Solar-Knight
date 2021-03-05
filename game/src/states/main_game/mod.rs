@@ -16,16 +16,14 @@ use sys_api::input_tracker::InputTracker;
 use crate::loaders::texture_load_from_file;
 
 mod ships;
-mod earth;
 //mod enemies;
 //mod player;
 
-use earth::*;
 use ships::*;
 //use player::*;
 //use enemies::{ Hive, Enemy, tester::Tester };
 
-const SPAWN_RATE : Duration = Duration::from_secs(20);
+const SPAWN_RATE : Duration = Duration::from_secs(5);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum PointerTarget {
@@ -77,7 +75,6 @@ pub struct StateData {
     player_bullet_texture : Texture2d,
     player_dash_trace_texture : Texture2d,
 
-    earth : Earth,
     battlefield : Battlefield,
 
     timer : Duration,
@@ -116,7 +113,6 @@ impl StateData {
                 
         GameState::MainGame(
             StateData {
-                earth : Earth::new(),
                 //hive : Hive::new(),
                 //player : Player::new(),
 
@@ -196,11 +192,10 @@ impl StateData {
             if !player.core.is_alive() { return Some(Box::new(main_menu::StateData::init)); }
         } else { panic!("No player!"); }
 
-        self.earth.update(dt);
-
         if self.timer.my_is_zero() {
             self.timer = SPAWN_RATE;
-            self.battlefield.spawn(ship_parts::enemy_tester(Team::Hive, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
+            //self.battlefield.spawn(ship_parts::enemy_tester(Team::Hive, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
+            self.battlefield.spawn(ship_parts::enemy_brute(Team::Hive, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
         } else { // TODO introduce enemy limit
             self.timer = self.timer.my_saturating_sub(dt);
         }
@@ -251,7 +246,7 @@ impl StateData {
         let vp = ctx.build_projection_view_matrix();
 
         draw_sprite(ctx, &mut frame, Matrix4::one(), &self.background_texture, Some(ctx.viewport()));
-        draw_sprite(ctx, &mut frame, vp * self.earth.model_mat(), &self.earth_texture, Some(ctx.viewport()));
+        draw_sprite(ctx, &mut frame, vp * self.battlefield.earth.model_mat(), &self.earth_texture, Some(ctx.viewport()));
         draw_sprite(ctx, &mut frame, vp * Matrix4::from_nonuniform_scale(0.6f32, 0.6f32, 1.0f32), &self.sun_texture, Some(ctx.viewport()));
 
         // Orphaning technique
@@ -271,7 +266,7 @@ impl StateData {
             match self.pointer_target {
                 PointerTarget::None => None,
                 PointerTarget::Sun => Some(Point2 { x : 0.0f32, y : 0.0f32 }),
-                PointerTarget::Earth => Some(self.earth.pos()),
+                PointerTarget::Earth => Some(self.battlefield.earth.pos()),
             }
         ;
 

@@ -1,6 +1,7 @@
 use std::any::{ Any, TypeId };
 use std::time::Duration;
 
+use crate::earth::Earth;
 use crate::core::{ Core, Team };
 use crate::gun::{ BulletSystem, TargetSystem };
 
@@ -31,6 +32,7 @@ pub struct Ship<S : 'static> {
         me : &mut Ship<S>,
         others : &ExtractResultMut<Ship<S>>,
         bullet_system : &mut BulletSystem,
+        earth : &Earth,
         dt : Duration
     ),
     pub core : Core,
@@ -75,6 +77,7 @@ impl<S : SuperShipLayout + 'static> Ship<S> {
             me : &mut Ship<T>,
             others : &ExtractResultMut<Ship<S>>,
             bullet_system : &mut BulletSystem,
+            earth : &Earth,
             dt : Duration
         ),
         render : fn(&Ship<T>, &mut SpriteDataWriter),
@@ -128,6 +131,7 @@ impl<S : SuperShipLayout + 'static> Ship<S> {
 }
 
 pub struct Battlefield<S : SuperShipLayout + 'static> {
+    pub earth : Earth,
     mem : Vec<Ship<S>>,
 }
 
@@ -135,10 +139,13 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
     pub fn new() -> Battlefield<S> {
         Battlefield {
             mem : Vec::new(),
+            earth : Earth::new(),
         }
     }
 
     pub fn update(&mut self, dt : Duration) {
+        self.earth.update(dt);
+
         self.mem.iter_mut()
         .for_each(|c| (c.update)(c, dt));
 
@@ -152,7 +159,7 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
             let (extract, elem) = self.mem.as_mut_slice().extract_mut(i);
 
             if elem.core.is_alive() {
-                (elem.think)(elem, &extract, bullet_system, dt);
+                (elem.think)(elem, &extract, bullet_system, &self.earth, dt);
             }
         }
     }

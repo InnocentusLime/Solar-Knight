@@ -11,10 +11,10 @@ pub struct Earth {
 
 impl Earth {
     pub const SUN_DISTANCE : f32 = 3.0f32;
-    pub const LOOP_TIME : Duration = Duration::from_secs(40);
+    pub const LOOP_TIME : Duration = Duration::from_secs(80);
     // Duration::as_secs_f32 is not a const fn yet (72440)
     //pub const EARTH_ANGLE_SPEED : f32 = std::f32::consts::TAU / EARTH_LOOP_TIME.as_secs_f32();
-    pub const ANGLE_SPEED : f32 = std::f32::consts::TAU / 40.0f32;
+    pub const ANGLE_SPEED : f32 = std::f32::consts::TAU / 80.0f32;
 
     pub fn new() -> Earth {
         Earth {

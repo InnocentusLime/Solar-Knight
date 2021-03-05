@@ -265,7 +265,7 @@ impl StateData {
 
         ctx.enemy_buffer.invalidate();
         self.battlefield.fill_buffer(&mut ctx.enemy_buffer);
-        draw_instanced_sprite(ctx, &mut frame, &ctx.enemy_buffer, vp, &self.basic_enemy_ship_texture, Some(ctx.viewport()));
+        draw_instanced_sprite(ctx, &mut frame, &ctx.enemy_buffer, vp, &self.player_ship_texture, Some(ctx.viewport()));
 
         let pointer_target = 
             match self.pointer_target {

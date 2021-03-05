@@ -7,6 +7,7 @@ use glutin::dpi::{ Size, LogicalSize, PhysicalSize };
 use glutin::{ ContextBuilder, event_loop::EventLoop };
 use glium::glutin::window::WindowBuilder;
 use glium::debug::DebugCallbackBehavior;
+use glium::buffer::WriteMapping;
 use cgmath::prelude::Transform;
 use cgmath::{ Decomposed, Matrix4, Vector3, Point3, Quaternion, One, ortho };
 
@@ -27,6 +28,31 @@ pub const SCREEN_LEFT : f32 = -SCREEN_RIGHT;
 pub const ENEMY_BULLET_LIMIT : usize = 10_000;
 pub const ENEMY_LIMIT : usize = 1000;
 pub const PLAYER_BULLET_LIMIT : usize = ENEMY_BULLET_LIMIT;
+
+pub struct SpriteDataWriter<'a> {
+    id : usize,
+    map : WriteMapping<'a, [SpriteData]>,
+}
+
+impl<'a> SpriteDataWriter<'a> {
+    #[inline]
+    pub fn new(map : WriteMapping<'a, [SpriteData]>) -> Self {
+        SpriteDataWriter {
+            id : 0,
+            map,
+        }
+    }
+
+    pub fn put(&mut self, x : SpriteData) {
+        if self.id < self.map.len() {
+            self.map.set(self.id, x);
+            self.id += 1;
+        } else {
+            #[cfg(debug_assertions)]
+            panic!("Vertex buffer overflow.");
+        }
+    }
+}
 
 pub struct RenderTargets {
     pub framebuffer1 : Texture2d,

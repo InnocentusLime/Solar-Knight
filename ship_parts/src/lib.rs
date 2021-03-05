@@ -29,7 +29,7 @@ macro_rules! declare_ships {
         ship $name:ident ($con:ident) {
             $($part_name:ident : $part_type:ty[$($arg:expr),*],)+
             [ai = $ai_proc:expr; data = $ai_data:ty]
-            [sprite_size = ($spr_x:expr, $spr_y:expr)] 
+            [render = $render_proc:expr] 
             [spawn_hp = $spawn_hp:expr; collision = $collision:ident]
         }
         )+
@@ -42,8 +42,6 @@ macro_rules! declare_ships {
             }
 
             impl $name {
-                const SPRITE_SIZE : (f32, f32) = ($spr_x, $spr_y);
-
                 #[inline]
                 pub fn new() -> Self {
                     $name {
@@ -58,8 +56,6 @@ macro_rules! declare_ships {
                 fn update(me : &mut Ship<$name>, dt : std::time::Duration) {
                     $(me.layout.$part_name.update(&mut me.core, dt);)+
                 }
-
-                fn sprite_size() -> (f32, f32) { Self::SPRITE_SIZE }
             }
             
             pub fn $con(team : Team, pos : cgmath::Point2<f32>, dir : cgmath::Vector2<f32>) -> ShipObject {
@@ -70,7 +66,8 @@ macro_rules! declare_ships {
                         crate::collision_models::model_indices::CollisionModelIndex::$collision, 
                         team, pos, dir
                     ),
-                    $ai_proc
+                    $ai_proc,
+                    $render_proc
                 )
             }
         )+
@@ -147,6 +144,29 @@ declare_engine!(
     }
 );
 
+use sys_api::basic_graphics_data::SpriteData;
+use sys_api::graphics_init::SpriteDataWriter;
+fn test_render<S>(
+    me : &Ship<S>,
+    buff : &mut SpriteDataWriter,
+) {
+    let m = me.model_mat((0.1f32, 0.1f32));
+    //dbg!(i); dbg!(m);
+            
+    let dat =
+        SpriteData {
+            mat_col1 : m.x.into(),
+            mat_col2 : m.y.into(),
+            mat_col3 : m.z.into(),
+            mat_col4 : m.w.into(),
+            texture_bottom_left : [0.0f32, 0.0f32],
+            texture_top_right : [1.0f32, 1.0f32],
+        }
+    ;
+
+    buff.put(dat);
+}
+
 pub fn enemy_tester_ai(
     me : &mut Ship<EnemyTester>,
     others : &std_ext::ExtractResultMut<ShipObject>, 
@@ -170,7 +190,7 @@ declare_ships!(
         dasher : PlayerDash[0],
         gun : TestGun[],
         [ai = no_ai::<PlayerShip>; data = ()]
-        [sprite_size = (0.1f32, 0.1f32)]
+        [render = test_render::<PlayerShip>]
         [spawn_hp = 3; collision = Player]
     }
 
@@ -178,7 +198,7 @@ declare_ships!(
         main_engine : TesterEnemyEngine[1],
         gun : TesterEnemyGun[],
         [ai = enemy_tester_ai; data = ()]
-        [sprite_size = (0.1f32, 0.1f32)]
+        [render = test_render::<EnemyTester>]
         [spawn_hp = 3; collision = EnemyTester]
     }
 );

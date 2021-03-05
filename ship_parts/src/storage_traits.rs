@@ -7,14 +7,13 @@ use crate::gun::{ BulletSystem, TargetSystem };
 use std_ext::{ ExtractResultMut, SliceExt };
 use std_ext::collections::MemoryChunk;
 use sys_api::basic_graphics_data::SpriteData;
+use sys_api::graphics_init::SpriteDataWriter;
 
 use glium::VertexBuffer;
 use cgmath::{ Matrix4, Point2, EuclideanSpace };
 
 pub trait ShipLayout<S> : Copy + Any + 'static {
     fn update(me : &mut Ship<Self>, dt : Duration);
-    // TODO each ship probably would like to write its own data
-    fn sprite_size() -> (f32, f32);
 }
 
 pub unsafe trait SuperShipLayout : Sized + 'static {
@@ -26,7 +25,7 @@ const PADDING_SIZE : usize = 0;
 #[repr(C)]
 pub struct Ship<S : 'static> {
     type_id : TypeId,
-    sprite_size : fn() -> (f32, f32),
+    pub render : fn(&Ship<S>, &mut SpriteDataWriter),
     update : fn(&mut Ship<S>, Duration),
     pub think : fn(
         me : &mut Ship<S>,
@@ -56,9 +55,7 @@ impl<S : 'static> Ship<S> {
     }
 
     #[inline]
-    fn model_mat(&self) -> Matrix4<f32> {
-        let size = (self.sprite_size)();
-
+    pub fn model_mat(&self, size : (f32, f32)) -> Matrix4<f32> {
         Matrix4::from_translation(self.core.pos.to_vec().extend(0.0f32)) * 
         Matrix4::new(
             self.core.direction.y, -self.core.direction.x, 0.0f32, 0.0f32,
@@ -79,7 +76,8 @@ impl<S : SuperShipLayout + 'static> Ship<S> {
             others : &ExtractResultMut<Ship<S>>,
             bullet_system : &mut BulletSystem,
             dt : Duration
-        )
+        ),
+        render : fn(&Ship<T>, &mut SpriteDataWriter),
     ) -> Ship<S> {
         use std::mem;
 
@@ -87,7 +85,7 @@ impl<S : SuperShipLayout + 'static> Ship<S> {
             unsafe {
                 Ship { 
                     type_id : TypeId::of::<T>(),
-                    sprite_size : <T as ShipLayout<S>>::sprite_size,
+                    render : mem::transmute(render as *const ()),
                     update : mem::transmute(<T as ShipLayout<S>>::update as *const ()),
                     think : mem::transmute(think as *const ()),
                     core,
@@ -164,7 +162,7 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
     }
             
     pub fn fill_buffer(&self, buff : &mut VertexBuffer<SpriteData>) {
-        use sys_api::graphics_init::ENEMY_LIMIT;
+        use sys_api::graphics_init::{ SpriteDataWriter, ENEMY_LIMIT };
                 
         let mut ptr = buff.map_write();
 
@@ -176,24 +174,8 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
             ptr.set(i, ZEROED_SPRITE_DATA);
         }
 
-        self.mem.iter()
-        .enumerate()
-        .for_each(|(i, x)| {
-            let m = x.model_mat();
-            
-            let dat =
-                SpriteData {
-                    mat_col1 : m.x.into(),
-                    mat_col2 : m.y.into(),
-                    mat_col3 : m.z.into(),
-                    mat_col4 : m.w.into(),
-                    texture_bottom_left : [0.0f32, 0.0f32],
-                    texture_top_right : [1.0f32, 1.0f32],
-                }
-            ;
-            
-            ptr.set(i, dat);
-        });
+        let mut writer = SpriteDataWriter::new(ptr);
+        self.mem.iter().for_each(|x| (x.render)(x, &mut writer));
     }
 
     #[inline]

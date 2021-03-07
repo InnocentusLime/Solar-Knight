@@ -116,7 +116,7 @@ declare_gun!(
     inf_gun TestGun {
         offset : cgmath::vec2(0.0f32, 0.0f32),
         bullet_kind : tester_bullet,
-        recoil : std::time::Duration::from_millis(133),
+        recoil : std::time::Duration::from_millis(350),
         direction : cgmath::vec2(0.0f32, 1.0f32),
     }
 );
@@ -172,6 +172,10 @@ fn test_render<S>(
 ) {
     let m = me.model_mat((0.1f32, 0.1f32));
     //dbg!(i); dbg!(m);
+    
+    let color : [f32; 4];
+    if me.core.team() == Team::Hive { color = [1.0f32, 0.01f32, 0.01f32, 1.0f32] }
+    else { color = [1.0f32; 4] }
             
     let dat =
         SpriteData {
@@ -180,7 +184,8 @@ fn test_render<S>(
             mat_col3 : m.z.into(),
             mat_col4 : m.w.into(),
             texture_bottom_left : [0.0f32, 0.0f32],
-            texture_top_right : [1.0f32, 1.0f32],
+            width_height : [1.0f32, 1.0f32],
+            color : color,
         }
     ;
 
@@ -224,6 +229,34 @@ pub fn enemy_brute_ai(
         me.core.direction = (earth.pos() - me.core.pos).normalize();
     }
 }
+
+/*
+pub fn enemy_smartie_ai(
+    me : &mut Ship<EnemySmartie>,
+    others : &std_ext::ExtractResultMut<ShipObject>, 
+    bullet_system : &mut BulletSystem,
+    earth : &Earth,
+    _dt : std::time::Duration,
+) {
+    const WAIT_TIME : Duration = Duration::from_seconds(4);
+
+    use cgmath::InnerSpace;
+    let player = &others[0];
+    let me_player_vec = (player.core.pos - me.core.pos);
+
+    if me.core.hp() > 2 {
+        if me_player_vec.magnitude() <= 4.0f32 {
+            // FIXME too hacky, rework with `directed gun`
+            me.core.direction = me_player_vec.normalize(); 
+            me.layout.gun.shoot(&me.core)
+            .map_or((), |x| bullet_system.spawn(x));
+            me.core.direction = (earth.pos() - me.core.pos).normalize();
+        }
+    } else {
+
+    }
+}
+*/
 
 declare_ships!(
     ship PlayerShip (player_ship) {

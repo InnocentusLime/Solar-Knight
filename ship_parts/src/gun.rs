@@ -315,7 +315,8 @@ impl BulletSystem {
                     mat_col3 : m.z.into(),
                     mat_col4 : m.w.into(),
                     texture_bottom_left : [0.0f32, 0.0f32],
-                    texture_top_right : [1.0f32, 1.0f32],
+                    width_height : [1.0f32, 1.0f32],
+                    color : [1.0f32, 1.0f32, 1.0f32, 1.0f32],
                 }
             ;
             

@@ -25,7 +25,7 @@ impl<T> MemoryChunk<T> {
         self.0.as_mut_slice()
     }
 
-    pub fn retain<F : Fn(&T) -> bool>(&mut self, f : F) {
+    pub fn retain<F : FnMut(&T) -> bool>(&mut self, mut f : F) {
         let mut i = 0;
         while i < self.0.len() {
             if f(&self.0[i]) {

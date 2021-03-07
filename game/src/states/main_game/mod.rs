@@ -153,18 +153,6 @@ impl StateData {
                 match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
                     Some(mut player) if player.core.is_alive() => {
                         match virtual_keycode {
-                            Some(event::VirtualKeyCode::W) => player.increase_speed(),
-                            Some(event::VirtualKeyCode::S) => player.decrease_speed(),
-                            Some(event::VirtualKeyCode::D) => {
-                                player.dash_right()
-                                .map_or((), |x| dasher_trace_data.update(player, x))
-                                // update the dash data
-                            },
-                            Some(event::VirtualKeyCode::A) => {
-                                player.dash_left()
-                                .map_or((), |x| dasher_trace_data.update(player, x))
-                                // update the dash data
-                            },
                             Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
                             Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
                             Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
@@ -183,6 +171,7 @@ impl StateData {
     pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, dt : Duration) -> Option<TransitionRequest> {
         use cgmath::{ vec2, dot };
         use cgmath::{ Transform, Angle, InnerSpace, Matrix4 };
+        use glutin::event;
 
         use std::ops::{ Add, Sub };
         use ship_parts::PlayerShip;
@@ -191,6 +180,7 @@ impl StateData {
             assert!(player.core.team() == Team::Earth);
             if !player.core.is_alive() { 
                 println!("You have died!");
+                println!("You have killed {} enemies", self.battlefield.frags);
                 return Some(Box::new(main_menu::StateData::init)); 
             }
         } else { panic!("No player!"); }
@@ -214,6 +204,19 @@ impl StateData {
             Some(player) if player.core.is_alive() => {
                 player.core.direction = input_tracker.mouse_position().normalize();
         
+                if input_tracker.is_key_down(event::VirtualKeyCode::W) {
+                    player.core.pos += dt.as_secs_f32() * vec2(0.0f32, 1.0f32);
+                }
+                if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
+                    player.core.pos += dt.as_secs_f32() * vec2(0.0f32, -1.0f32);
+                }
+                if input_tracker.is_key_down(event::VirtualKeyCode::D) {
+                    player.core.pos += dt.as_secs_f32() * vec2(1.0f32, 0.0f32);
+                }
+                if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
+                    player.core.pos += dt.as_secs_f32() * vec2(-1.0f32, 0.0f32)
+                }
+                
                 if input_tracker.is_mouse_button_down(MouseButton::Left) {
                     player.layout.gun.shoot(&player.core)
                     .map_or((), |x| self.bullet_sys.spawn(x));

@@ -157,11 +157,6 @@ impl StateData {
                 match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
                     Some(mut player) if player.core.is_alive() => {
                         match virtual_keycode {
-<<<<<<< HEAD
-                            Some(event::VirtualKeyCode::C) => {
-                                self.scheme = (self.scheme + 1) % 3;
-                                println!("Scheme: {}", self.scheme);
-=======
                             Some(event::VirtualKeyCode::W) => player.increase_speed(),
                             Some(event::VirtualKeyCode::S) => player.decrease_speed(),
                             Some(event::VirtualKeyCode::D) => {
@@ -173,7 +168,6 @@ impl StateData {
                                 player.dash_left()
                                 .map_or((), |x| dasher_trace_data.update(player, x))
                                 // update the dash data
->>>>>>> parent of d16f79f... Quickfix: player controls remake
                             },
                             Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
                             Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,

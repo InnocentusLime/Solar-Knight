@@ -81,6 +81,8 @@ pub struct StateData {
     pointer_target : PointerTarget,
     dasher_trace_data : DasherTraceData,
     bullet_sys : BulletSystem,
+
+    new_controls : bool,
 }
 
 impl StateData {
@@ -129,6 +131,8 @@ impl StateData {
                 dasher_trace_data : DasherTraceData::new(),
                 bullet_sys : BulletSystem::new(),
                 battlefield,
+
+                new_controls : false,
             }
         )
     }
@@ -153,6 +157,10 @@ impl StateData {
                 match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
                     Some(mut player) if player.core.is_alive() => {
                         match virtual_keycode {
+                            Some(event::VirtualKeyCode::C) => {
+                                self.new_controls = !self.new_controls;
+                                println!("New controls: {}", self.new_controls);
+                            },
                             Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
                             Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
                             Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
@@ -203,18 +211,41 @@ impl StateData {
         match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
             Some(player) if player.core.is_alive() => {
                 player.core.direction = input_tracker.mouse_position().normalize();
-        
-                if input_tracker.is_key_down(event::VirtualKeyCode::W) {
-                    player.core.pos += dt.as_secs_f32() * vec2(0.0f32, 1.0f32);
+       
+                let mut dir = vec2(0.0f32, 0.0f32);
+                if self.new_controls {
+                    if input_tracker.is_key_down(event::VirtualKeyCode::W) {
+                        dir += player.core.direction;
+                    }
+                    if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
+                        dir += -player.core.direction;
+                    }
+                    if input_tracker.is_key_down(event::VirtualKeyCode::D) {
+                        let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, -1.0f32));
+                        dir += direction;
+                    }
+                    if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
+                        let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, 1.0f32));
+                        dir += direction;
+                    }
+                } else {
+                    if input_tracker.is_key_down(event::VirtualKeyCode::W) {
+                        dir += vec2(0.0f32, 1.0f32);
+                    }
+                    if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
+                        dir += vec2(0.0f32, -1.0f32);
+                    }
+                    if input_tracker.is_key_down(event::VirtualKeyCode::D) {
+                        dir += vec2(1.0f32, 0.0f32);
+                    }
+                    if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
+                        dir += vec2(-1.0f32, 0.0f32)
+                    }
                 }
-                if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
-                    player.core.pos += dt.as_secs_f32() * vec2(0.0f32, -1.0f32);
-                }
-                if input_tracker.is_key_down(event::VirtualKeyCode::D) {
-                    player.core.pos += dt.as_secs_f32() * vec2(1.0f32, 0.0f32);
-                }
-                if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
-                    player.core.pos += dt.as_secs_f32() * vec2(-1.0f32, 0.0f32)
+
+                if dir.magnitude() > ship_parts::constants::VECTOR_NORMALIZATION_RANGE {
+                    dir = dir.normalize();
+                    player.core.pos += dt.as_secs_f32() * dir;
                 }
                 
                 if input_tracker.is_mouse_button_down(MouseButton::Left) {

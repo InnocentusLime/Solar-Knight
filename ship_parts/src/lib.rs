@@ -106,7 +106,7 @@ declare_engine!(
 
 declare_engine!(
     snappy_engine BruteEngine { 
-        speed_mul : 0.08f32, 
+        speed_mul : 0.06f32, 
         max_lvl : 1, 
         direction : (0.0f32, 1.0f32),
     }

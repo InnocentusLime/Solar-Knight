@@ -23,7 +23,7 @@ use ships::*;
 //use player::*;
 //use enemies::{ Hive, Enemy, tester::Tester };
 
-const SPAWN_RATE : Duration = Duration::from_secs(3);
+const SPAWN_RATE : Duration = Duration::from_secs(5);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum PointerTarget {
@@ -186,24 +186,13 @@ impl StateData {
 
         if let Some(player) = self.battlefield.get(0) {
             assert!(player.core.team() == Team::Earth);
-            if !player.core.is_alive() { 
-                println!("You have died!");
-                println!("You have killed {} enemies", self.battlefield.frags);
-                return Some(Box::new(main_menu::StateData::init)); 
-            }
+            if !player.core.is_alive() { return Some(Box::new(main_menu::StateData::init)); }
         } else { panic!("No player!"); }
 
         if self.timer.my_is_zero() {
-            const SPAWN_DISTANCE : f32 = 5.0f32;
-
             self.timer = SPAWN_RATE;
             //self.battlefield.spawn(ship_parts::enemy_tester(Team::Hive, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
-            let n = rand::random::<u16>() % 40;
-            let u = (std::f32::consts::TAU / 40.0f32) * (n as f32);
-            let (s, c) = u.sin_cos();
-            let (x, y) = (c * SPAWN_DISTANCE, s * SPAWN_DISTANCE);
-            //dbg!((x, y));
-            self.battlefield.spawn(ship_parts::enemy_brute(Team::Hive, point2(x, y), vec2(0.0f32, 1.0f32)));
+            self.battlefield.spawn(ship_parts::enemy_brute(Team::Hive, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
         } else { // TODO introduce enemy limit
             self.timer = self.timer.my_saturating_sub(dt);
         }

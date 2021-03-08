@@ -11,7 +11,6 @@ cgmath = "0.18.0"
 glium = "0.29.0"
 log = "*"
 image = "*"
-rand = "0.8.3"
 
 sys_api = { path = "../sys_api" }
 collision = { path = "../collision" }

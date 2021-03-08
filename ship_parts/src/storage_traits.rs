@@ -131,7 +131,6 @@ impl<S : SuperShipLayout + 'static> Ship<S> {
 }
 
 pub struct Battlefield<S : SuperShipLayout + 'static> {
-    pub frags : u64,
     pub earth : Earth,
     mem : Vec<Ship<S>>,
 }
@@ -139,7 +138,6 @@ pub struct Battlefield<S : SuperShipLayout + 'static> {
 impl<S : SuperShipLayout + 'static> Battlefield<S> {
     pub fn new() -> Battlefield<S> {
         Battlefield {
-            frags : 0,
             mem : Vec::new(),
             earth : Earth::new(),
         }
@@ -151,15 +149,7 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
         self.mem.iter_mut()
         .for_each(|c| (c.update)(c, dt));
 
-        let frags = &mut self.frags;
-        self.mem.retain(
-            |x| 
-            if x.core.is_alive() { true } 
-            else {
-              if x.core.team() == Team::Earth { true }
-              else { *frags += 1; false }
-            }
-        );
+        self.mem.retain(|x| x.core.is_alive() || x.core.team() == Team::Earth);
     }
             
     pub fn think(&mut self, bullet_system : &mut BulletSystem, dt : Duration) {

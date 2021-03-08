@@ -157,9 +157,23 @@ impl StateData {
                 match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
                     Some(mut player) if player.core.is_alive() => {
                         match virtual_keycode {
+<<<<<<< HEAD
                             Some(event::VirtualKeyCode::C) => {
                                 self.scheme = (self.scheme + 1) % 3;
                                 println!("Scheme: {}", self.scheme);
+=======
+                            Some(event::VirtualKeyCode::W) => player.increase_speed(),
+                            Some(event::VirtualKeyCode::S) => player.decrease_speed(),
+                            Some(event::VirtualKeyCode::D) => {
+                                player.dash_right()
+                                .map_or((), |x| dasher_trace_data.update(player, x))
+                                // update the dash data
+                            },
+                            Some(event::VirtualKeyCode::A) => {
+                                player.dash_left()
+                                .map_or((), |x| dasher_trace_data.update(player, x))
+                                // update the dash data
+>>>>>>> parent of d16f79f... Quickfix: player controls remake
                             },
                             Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
                             Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
@@ -179,7 +193,6 @@ impl StateData {
     pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, dt : Duration) -> Option<TransitionRequest> {
         use cgmath::{ vec2, dot };
         use cgmath::{ Transform, Angle, InnerSpace, Matrix4 };
-        use glutin::event;
 
         use std::ops::{ Add, Sub };
         use ship_parts::PlayerShip;
@@ -188,7 +201,6 @@ impl StateData {
             assert!(player.core.team() == Team::Earth);
             if !player.core.is_alive() { 
                 println!("You have died!");
-                println!("You have killed {} enemies", self.battlefield.frags);
                 return Some(Box::new(main_menu::StateData::init)); 
             }
         } else { panic!("No player!"); }
@@ -210,102 +222,11 @@ impl StateData {
 
         match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
             Some(player) if player.core.is_alive() => {
-                match self.scheme {
-                    1 => {
-                        player.core.direction = input_tracker.mouse_position().normalize();
-                        let mut dir = vec2(0.0f32, 0.0f32);
-                        if input_tracker.is_key_down(event::VirtualKeyCode::W) {
-                            dir += player.core.direction;
-                        }
-                        if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
-                            dir += -player.core.direction;
-                        }
-                        if input_tracker.is_key_down(event::VirtualKeyCode::D) {
-                            let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, -1.0f32));
-                            dir += direction;
-                        }
-                        if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
-                            let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, 1.0f32));
-                            dir += direction;
-                        }
-                        if dir.magnitude() > ship_parts::constants::VECTOR_NORMALIZATION_RANGE {
-                            dir = dir.normalize();
-                            player.core.pos += dt.as_secs_f32() * dir;
-                        }        
-                        if input_tracker.is_mouse_button_down(MouseButton::Left) {
-                            player.layout.gun.shoot(&player.core)
-                            .map_or((), |x| self.bullet_sys.spawn(x));
-                        }
-                    },
-                    0 => {
-                        player.core.direction = input_tracker.mouse_position().normalize();
-                        let mut dir = vec2(0.0f32, 0.0f32);
-                        if input_tracker.is_key_down(event::VirtualKeyCode::W) {
-                            dir += vec2(0.0f32, 1.0f32);
-                        }
-                        if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
-                            dir += vec2(0.0f32, -1.0f32);
-                        }
-                        if input_tracker.is_key_down(event::VirtualKeyCode::D) {
-                            dir += vec2(1.0f32, 0.0f32);
-                        }
-                        if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
-                            dir += vec2(-1.0f32, 0.0f32)
-                        }
-                        if dir.magnitude() > ship_parts::constants::VECTOR_NORMALIZATION_RANGE {
-                            dir = dir.normalize();
-                            player.core.pos += dt.as_secs_f32() * dir;
-                        }        
-                        if input_tracker.is_mouse_button_down(MouseButton::Left) {
-                            player.layout.gun.shoot(&player.core)
-                            .map_or((), |x| self.bullet_sys.spawn(x));
-                        }
-                    }
-                    2 => {
-                        const ANGLE_DELTA : f32 = std::f32::consts::TAU / 3.0f32;
-
-                        if input_tracker.is_key_down(event::VirtualKeyCode::Left) {
-                            let ang = ANGLE_DELTA * dt.as_secs_f32();
-                            let rot_vec = {
-                                let (s, c) = ang.sin_cos();
-                                vec2(c, s)
-                            };
-                            player.core.direction = cgmath_ext::rotate_vector_ox(player.core.direction, rot_vec);
-                        }
-                        if input_tracker.is_key_down(event::VirtualKeyCode::Right) {
-                            let ang = -ANGLE_DELTA * dt.as_secs_f32();
-                            let rot_vec = {
-                                let (s, c) = ang.sin_cos();
-                                vec2(c, s)
-                            };
-                            player.core.direction = cgmath_ext::rotate_vector_ox(player.core.direction, rot_vec);
-                        }
-
-                        let mut dir = vec2(0.0f32, 0.0f32);
-                        if input_tracker.is_key_down(event::VirtualKeyCode::W) {
-                            dir += player.core.direction;
-                        }
-                        if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
-                            dir += -player.core.direction;
-                        }
-                        if input_tracker.is_key_down(event::VirtualKeyCode::D) {
-                            let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, -1.0f32));
-                            dir += direction;
-                        }
-                        if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
-                            let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, 1.0f32));
-                            dir += direction;
-                        }
-                        if dir.magnitude() > ship_parts::constants::VECTOR_NORMALIZATION_RANGE {
-                            dir = dir.normalize();
-                            player.core.pos += dt.as_secs_f32() * dir;
-                        }        
-                        if input_tracker.is_key_down(event::VirtualKeyCode::Up) {
-                            player.layout.gun.shoot(&player.core)
-                            .map_or((), |x| self.bullet_sys.spawn(x));
-                        }
-                    },
-                    _ => panic!("Scheme ID out of range"),
+                player.core.direction = input_tracker.mouse_position().normalize();
+        
+                if input_tracker.is_mouse_button_down(MouseButton::Left) {
+                    player.layout.gun.shoot(&player.core)
+                    .map_or((), |x| self.bullet_sys.spawn(x));
                 }
             },
             _ => (),

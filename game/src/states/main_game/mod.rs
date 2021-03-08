@@ -37,8 +37,8 @@ pub fn point_at(from : Point2<f32>, at : Point2<f32>) -> Option<Point2<f32>> {
     use sys_api::graphics_init::SCREEN_WIDTH;
 
     let v = at - from;
-    let x = (v.x / v.y.abs()).clamp(-SCREEN_WIDTH, SCREEN_WIDTH);
-    let y = (SCREEN_WIDTH * v.y / v.x.abs()).clamp(-1.0f32, 1.0f32);
+    let x = (v.x / v.y.abs()).clamp(-2.0f32*SCREEN_WIDTH, 2.0f32*SCREEN_WIDTH);
+    let y = (SCREEN_WIDTH * v.y / v.x.abs()).clamp(-2.0f32, 2.0f32);
     let pointer_v = vec2(x, y);
 
     if pointer_v.magnitude2() > v.magnitude2() { None }
@@ -82,7 +82,7 @@ pub struct StateData {
     dasher_trace_data : DasherTraceData,
     bullet_sys : BulletSystem,
 
-    new_controls : bool,
+    scheme : u8,
 }
 
 impl StateData {
@@ -132,7 +132,7 @@ impl StateData {
                 bullet_sys : BulletSystem::new(),
                 battlefield,
 
-                new_controls : false,
+                scheme : 0,
             }
         )
     }
@@ -158,8 +158,8 @@ impl StateData {
                     Some(mut player) if player.core.is_alive() => {
                         match virtual_keycode {
                             Some(event::VirtualKeyCode::C) => {
-                                self.new_controls = !self.new_controls;
-                                println!("New controls: {}", self.new_controls);
+                                self.scheme = (self.scheme + 1) % 3;
+                                println!("Scheme: {}", self.scheme);
                             },
                             Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
                             Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
@@ -210,47 +210,102 @@ impl StateData {
 
         match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
             Some(player) if player.core.is_alive() => {
-                player.core.direction = input_tracker.mouse_position().normalize();
-       
-                let mut dir = vec2(0.0f32, 0.0f32);
-                if self.new_controls {
-                    if input_tracker.is_key_down(event::VirtualKeyCode::W) {
-                        dir += player.core.direction;
+                match self.scheme {
+                    1 => {
+                        player.core.direction = input_tracker.mouse_position().normalize();
+                        let mut dir = vec2(0.0f32, 0.0f32);
+                        if input_tracker.is_key_down(event::VirtualKeyCode::W) {
+                            dir += player.core.direction;
+                        }
+                        if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
+                            dir += -player.core.direction;
+                        }
+                        if input_tracker.is_key_down(event::VirtualKeyCode::D) {
+                            let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, -1.0f32));
+                            dir += direction;
+                        }
+                        if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
+                            let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, 1.0f32));
+                            dir += direction;
+                        }
+                        if dir.magnitude() > ship_parts::constants::VECTOR_NORMALIZATION_RANGE {
+                            dir = dir.normalize();
+                            player.core.pos += dt.as_secs_f32() * dir;
+                        }        
+                        if input_tracker.is_mouse_button_down(MouseButton::Left) {
+                            player.layout.gun.shoot(&player.core)
+                            .map_or((), |x| self.bullet_sys.spawn(x));
+                        }
+                    },
+                    0 => {
+                        player.core.direction = input_tracker.mouse_position().normalize();
+                        let mut dir = vec2(0.0f32, 0.0f32);
+                        if input_tracker.is_key_down(event::VirtualKeyCode::W) {
+                            dir += vec2(0.0f32, 1.0f32);
+                        }
+                        if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
+                            dir += vec2(0.0f32, -1.0f32);
+                        }
+                        if input_tracker.is_key_down(event::VirtualKeyCode::D) {
+                            dir += vec2(1.0f32, 0.0f32);
+                        }
+                        if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
+                            dir += vec2(-1.0f32, 0.0f32)
+                        }
+                        if dir.magnitude() > ship_parts::constants::VECTOR_NORMALIZATION_RANGE {
+                            dir = dir.normalize();
+                            player.core.pos += dt.as_secs_f32() * dir;
+                        }        
+                        if input_tracker.is_mouse_button_down(MouseButton::Left) {
+                            player.layout.gun.shoot(&player.core)
+                            .map_or((), |x| self.bullet_sys.spawn(x));
+                        }
                     }
-                    if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
-                        dir += -player.core.direction;
-                    }
-                    if input_tracker.is_key_down(event::VirtualKeyCode::D) {
-                        let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, -1.0f32));
-                        dir += direction;
-                    }
-                    if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
-                        let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, 1.0f32));
-                        dir += direction;
-                    }
-                } else {
-                    if input_tracker.is_key_down(event::VirtualKeyCode::W) {
-                        dir += vec2(0.0f32, 1.0f32);
-                    }
-                    if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
-                        dir += vec2(0.0f32, -1.0f32);
-                    }
-                    if input_tracker.is_key_down(event::VirtualKeyCode::D) {
-                        dir += vec2(1.0f32, 0.0f32);
-                    }
-                    if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
-                        dir += vec2(-1.0f32, 0.0f32)
-                    }
-                }
+                    2 => {
+                        const ANGLE_DELTA : f32 = std::f32::consts::TAU / 3.0f32;
 
-                if dir.magnitude() > ship_parts::constants::VECTOR_NORMALIZATION_RANGE {
-                    dir = dir.normalize();
-                    player.core.pos += dt.as_secs_f32() * dir;
-                }
-                
-                if input_tracker.is_mouse_button_down(MouseButton::Left) {
-                    player.layout.gun.shoot(&player.core)
-                    .map_or((), |x| self.bullet_sys.spawn(x));
+                        if input_tracker.is_key_down(event::VirtualKeyCode::Left) {
+                            let ang = ANGLE_DELTA * dt.as_secs_f32();
+                            let rot_vec = {
+                                let (s, c) = ang.sin_cos();
+                                vec2(c, s)
+                            };
+                            player.core.direction = cgmath_ext::rotate_vector_ox(player.core.direction, rot_vec);
+                        }
+                        if input_tracker.is_key_down(event::VirtualKeyCode::Right) {
+                            let ang = -ANGLE_DELTA * dt.as_secs_f32();
+                            let rot_vec = {
+                                let (s, c) = ang.sin_cos();
+                                vec2(c, s)
+                            };
+                            player.core.direction = cgmath_ext::rotate_vector_ox(player.core.direction, rot_vec);
+                        }
+
+                        let mut dir = vec2(0.0f32, 0.0f32);
+                        if input_tracker.is_key_down(event::VirtualKeyCode::W) {
+                            dir += player.core.direction;
+                        }
+                        if input_tracker.is_key_down(event::VirtualKeyCode::S) { 
+                            dir += -player.core.direction;
+                        }
+                        if input_tracker.is_key_down(event::VirtualKeyCode::D) {
+                            let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, -1.0f32));
+                            dir += direction;
+                        }
+                        if input_tracker.is_key_down(event::VirtualKeyCode::A) { 
+                            let direction = cgmath_ext::rotate_vector_ox(player.core.direction, vec2(0.0f32, 1.0f32));
+                            dir += direction;
+                        }
+                        if dir.magnitude() > ship_parts::constants::VECTOR_NORMALIZATION_RANGE {
+                            dir = dir.normalize();
+                            player.core.pos += dt.as_secs_f32() * dir;
+                        }        
+                        if input_tracker.is_key_down(event::VirtualKeyCode::Up) {
+                            player.layout.gun.shoot(&player.core)
+                            .map_or((), |x| self.bullet_sys.spawn(x));
+                        }
+                    },
+                    _ => panic!("Scheme ID out of range"),
                 }
             },
             _ => (),

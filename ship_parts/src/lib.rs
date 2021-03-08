@@ -141,8 +141,8 @@ declare_gun!(
 
 declare_engine!(
     snappy_engine PlayerEngine { 
-        speed_mul : 0.5f32, 
-        max_lvl : 4, 
+        speed_mul : 2.0f32, 
+        max_lvl : 1, 
         direction : (0.0f32, 1.0f32),
     }
 );

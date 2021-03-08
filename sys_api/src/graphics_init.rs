@@ -147,7 +147,8 @@ impl GraphicsContext {
         // stuff. 
         // IMHO, an orign which is in top left corner is more sensible for an UI rather than for
         // level geometry
-        let proj_mat = ortho(SCREEN_LEFT, SCREEN_RIGHT, -1.0f32, 1.0f32, -1.0f32, 1.0f32);
+        //let proj_mat = ortho(SCREEN_LEFT, SCREEN_RIGHT, -1.0f32, 1.0f32, -1.0f32, 1.0f32);
+        let proj_mat = ortho(2.0f32*SCREEN_LEFT, 2.0f32*SCREEN_RIGHT, -2.0f32, 2.0f32, -1.0f32, 1.0f32);
 
         let framebuffer1 = verbose_try!(Texture2d::empty(&display, phys_size.width, phys_size.height), framebuffer1_creation);
 

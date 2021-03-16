@@ -1,11 +1,19 @@
 use glium::{ draw_parameters, index, VertexBuffer, Surface, Blend, Rect, uniform };
 use glium::texture::texture2d::Texture2d;
+use glium::uniforms::Sampler;
 use cgmath::{ Matrix4, Vector2 };
 
 use crate::basic_graphics_data::SpriteData;
 use crate::graphics_init::{ GraphicsContext, ASPECT_RATIO };
 
-pub fn draw_sprite<S : Surface>(ctx : &GraphicsContext, target : &mut S, mvp : Matrix4<f32>, texture : &Texture2d, viewport : Option<Rect>) {
+pub fn draw_sprite<S : Surface>(
+    ctx : &GraphicsContext, 
+    target : &mut S, 
+    mvp : Matrix4<f32>, 
+    tex_view : (f32, f32, f32, f32),
+    texture : Sampler<Texture2d>, 
+    viewport : Option<Rect>
+) {
     use glium::uniforms::{ MinifySamplerFilter, MagnifySamplerFilter };
     use cgmath::conv::{ array2, array4x4 };
 
@@ -15,8 +23,10 @@ pub fn draw_sprite<S : Surface>(ctx : &GraphicsContext, target : &mut S, mvp : M
 
     let uniforms =
         uniform!(
-            tex : texture.sampled().minify_filter(MinifySamplerFilter::Nearest).magnify_filter(MagnifySamplerFilter::Nearest),
+            tex : texture.minify_filter(MinifySamplerFilter::Nearest).magnify_filter(MagnifySamplerFilter::Nearest),
             mvp : array4x4(mvp),
+            texture_bottom_left : [tex_view.0, tex_view.1],
+            width_height : [tex_view.2, tex_view.3],
         )
     ;
 
@@ -29,7 +39,7 @@ pub fn draw_sprite<S : Surface>(ctx : &GraphicsContext, target : &mut S, mvp : M
     ).unwrap();
 }
 
-pub fn draw_instanced_sprite<S : Surface>(ctx : &GraphicsContext, target : &mut S, instance_data : &VertexBuffer<SpriteData>, vp : Matrix4<f32>, texture : &Texture2d, viewport : Option<Rect>) {
+pub fn draw_instanced_sprite<S : Surface>(ctx : &GraphicsContext, target : &mut S, instance_data : &VertexBuffer<SpriteData>, vp : Matrix4<f32>, texture : Sampler<Texture2d>, viewport : Option<Rect>) {
     use glium::uniforms::{ MinifySamplerFilter, MagnifySamplerFilter };
     use cgmath::conv::{ array2, array4x4 };
 
@@ -39,7 +49,7 @@ pub fn draw_instanced_sprite<S : Surface>(ctx : &GraphicsContext, target : &mut 
 
     let uniforms =
         uniform!(
-            tex : texture.sampled().minify_filter(MinifySamplerFilter::Nearest).magnify_filter(MagnifySamplerFilter::Nearest),
+            tex : texture.minify_filter(MinifySamplerFilter::Nearest).magnify_filter(MagnifySamplerFilter::Nearest),
             vp : array4x4(vp),
         )
     ;

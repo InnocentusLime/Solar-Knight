@@ -59,8 +59,20 @@ impl StateData {
         /* render code */
         let vp = ctx.proj_mat;
 
-        draw_sprite(ctx, &mut frame, Matrix4::one(), &self.background_texture, Some(ctx.viewport()));
-        draw_sprite(ctx, &mut frame, vp * Matrix4::from_nonuniform_scale(0.5f32, 0.5f32, 1.0f32), &self.play_button_texture, Some(ctx.viewport()));
+        draw_sprite(
+            ctx, &mut frame, 
+            Matrix4::one(), 
+            (0.0f32, 0.0f32, 1.0f32, 1.0f32),
+            self.background_texture.sampled(), 
+            Some(ctx.viewport())
+        );
+        draw_sprite(
+            ctx, &mut frame, 
+            vp * Matrix4::from_nonuniform_scale(0.5f32, 0.5f32, 1.0f32), 
+            (0.0f32, 0.0f32, 1.0f32, 1.0f32),
+            self.play_button_texture.sampled(), 
+            Some(ctx.viewport())
+        );
 
         frame.finish().unwrap(); 
     }

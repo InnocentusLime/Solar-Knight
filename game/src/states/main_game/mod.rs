@@ -4,6 +4,7 @@ use log::{ trace, info, warn };
 use cgmath::{ EuclideanSpace, InnerSpace, One, Rad, Angle, Vector2, Point2, vec2, point2 };
 use glium::glutin;
 use glium::texture::texture2d::Texture2d;
+use glium::uniforms::SamplerWrapFunction;
 use glutin::event::{ VirtualKeyCode, MouseButton };
 
 use sys_api::basic_graphics_data::SpriteData;
@@ -37,8 +38,8 @@ pub fn point_at(from : Point2<f32>, at : Point2<f32>) -> Option<Point2<f32>> {
     use sys_api::graphics_init::SCREEN_WIDTH;
 
     let v = at - from;
-    let x = (v.x / v.y.abs()).clamp(-2.0f32*SCREEN_WIDTH, 2.0f32*SCREEN_WIDTH);
-    let y = (SCREEN_WIDTH * v.y / v.x.abs()).clamp(-2.0f32, 2.0f32);
+    let x = (v.x / v.y.abs()).clamp(-SCREEN_WIDTH, SCREEN_WIDTH);
+    let y = (SCREEN_WIDTH * v.y / v.x.abs()).clamp(-1.0f32, 1.0f32);
     let pointer_v = vec2(x, y);
 
     if pointer_v.magnitude2() > v.magnitude2() { None }
@@ -93,17 +94,7 @@ impl StateData {
         let basic_enemy_ship_texture = texture_load_from_file(&ctx.display, "textures/basic_enemy_ship.png").unwrap();
         let player_bullet_texture = texture_load_from_file(&ctx.display, "textures/player_bullet.png").unwrap();
         let player_dash_trace_texture = texture_load_from_file(&ctx.display, "textures/player_dash_trace.png").unwrap();
-
-        let background_texture;
-
-        match old {
-            GameState::MainMenu(dat) => {
-                background_texture = dat.background_texture;
-            },
-            _ => {
-                background_texture = texture_load_from_file(&ctx.display, "textures/background.png").unwrap();
-            },
-        }
+        let background_texture = texture_load_from_file(&ctx.display, "textures/background_game.png").unwrap();
 
         let mut battlefield = Battlefield::new();
 
@@ -205,7 +196,7 @@ impl StateData {
             let (s, c) = u.sin_cos();
             let (x, y) = (c * SPAWN_DISTANCE, s * SPAWN_DISTANCE);
             //dbg!((x, y));
-            self.battlefield.spawn(ship_parts::enemy_brute(Team::Hive, point2(x, y), vec2(0.0f32, 1.0f32)));
+            //self.battlefield.spawn(ship_parts::enemy_brute(Team::Hive, point2(x, y), vec2(0.0f32, 1.0f32)));
         } else { // TODO introduce enemy limit
             self.timer = self.timer.my_saturating_sub(dt);
         }
@@ -251,13 +242,43 @@ impl StateData {
         use sys_api::graphics_init::{ ASPECT_RATIO, ENEMY_BULLET_LIMIT };
 
         let mut frame = ctx.display.draw();
-        frame.clear_color(1.0, 0.0, 0.0, 1.0);
+        frame.clear_color(0.0, 0.0, 0.0, 1.0);
 
         let vp = ctx.build_projection_view_matrix();
 
-        draw_sprite(ctx, &mut frame, Matrix4::one(), &self.background_texture, Some(ctx.viewport()));
-        draw_sprite(ctx, &mut frame, vp * self.battlefield.earth.model_mat(), &self.earth_texture, Some(ctx.viewport()));
-        draw_sprite(ctx, &mut frame, vp * Matrix4::from_nonuniform_scale(0.6f32, 0.6f32, 1.0f32), &self.sun_texture, Some(ctx.viewport()));
+        // Drawing paralaxed background
+        let cam = -ctx.camera.disp.truncate(); 
+        let picker = vec2((0.2f32 * cam.x) % 1.0f32, (0.2f32 * cam.y) % 1.0f32);
+        draw_sprite(
+            ctx, &mut frame, 
+            Matrix4::one(),
+            (picker.x, picker.y, 1.0f32, 1.0f32),
+            self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
+            Some(ctx.viewport())
+        );
+        let picker = vec2((0.05f32 * cam.x + 0.0001f32) % 1.0f32, (0.05f32 * cam.y + 0.0001f32) % 1.0f32);
+        draw_sprite(
+            ctx, &mut frame, 
+            Matrix4::one(),
+            (picker.x, picker.y, 1.0f32, 1.0f32),
+            self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
+            Some(ctx.viewport())
+        );
+        // Planets 
+        draw_sprite(
+            ctx, &mut frame, 
+            vp * self.battlefield.earth.model_mat(), 
+            (0.0f32, 0.0f32, 1.0f32, 1.0f32),
+            self.earth_texture.sampled(), 
+            Some(ctx.viewport())
+        );
+        draw_sprite(
+            ctx, &mut frame, 
+            vp * Matrix4::from_nonuniform_scale(0.6f32, 0.6f32, 1.0f32), 
+            (0.0f32, 0.0f32, 1.0f32, 1.0f32),
+            self.sun_texture.sampled(), 
+            Some(ctx.viewport())
+        );
 
         // Orphaning technique
         // https://stackoverflow.com/questions/43036568/when-should-glinvalidatebufferdata-be-used
@@ -266,11 +287,11 @@ impl StateData {
         
         ctx.bullet_buffer.invalidate();
         self.bullet_sys.fill_buffer(&mut ctx.bullet_buffer);
-        draw_instanced_sprite(ctx, &mut frame, &ctx.bullet_buffer, vp, &self.player_bullet_texture, Some(ctx.viewport()));
+        draw_instanced_sprite(ctx, &mut frame, &ctx.bullet_buffer, vp, self.player_bullet_texture.sampled(), Some(ctx.viewport()));
 
         ctx.enemy_buffer.invalidate();
         self.battlefield.fill_buffer(&mut ctx.enemy_buffer);
-        draw_instanced_sprite(ctx, &mut frame, &ctx.enemy_buffer, vp, &self.player_ship_texture, Some(ctx.viewport()));
+        draw_instanced_sprite(ctx, &mut frame, &ctx.enemy_buffer, vp, self.player_ship_texture.sampled(), Some(ctx.viewport()));
 
         let pointer_target = 
             match self.pointer_target {
@@ -293,7 +314,13 @@ impl StateData {
         match pointer {
             Some(pointer) => {
                 let model_mat = ctx.proj_mat * Matrix4::from_translation(pointer.to_vec().extend(0.0f32)) * Matrix4::from_nonuniform_scale(0.1f32, 0.1f32, 1.0f32);
-                draw_sprite(ctx, &mut frame, model_mat, &self.basic_enemy_ship_texture, Some(ctx.viewport()))
+                draw_sprite(
+                    ctx, &mut frame, 
+                    model_mat, 
+                    (0.0f32, 0.0f32, 1.0f32, 1.0f32),
+                    self.basic_enemy_ship_texture.sampled(), 
+                    Some(ctx.viewport())
+                )
             },
             None => (),
         }
@@ -319,7 +346,13 @@ impl StateData {
                     0.0f32, 0.0f32, 0.0f32, 1.0f32,
                 ) * 
                 Matrix4::from_nonuniform_scale(k * 0.04f32, (k / 2.0f32 * 0.4f32 + 0.6f32) * 0.125f32, 1.0f32); 
-                draw_sprite(ctx, &mut frame, vp * model_mat, &self.player_dash_trace_texture, Some(ctx.viewport()))
+                draw_sprite(
+                    ctx, &mut frame, 
+                    vp * model_mat, 
+                    (0.0f32, 0.0f32, 1.0f32, 1.0f32),
+                    self.player_dash_trace_texture.sampled(), 
+                    Some(ctx.viewport())
+                )
             }
         );
         

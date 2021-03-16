@@ -81,8 +81,6 @@ pub struct StateData {
     pointer_target : PointerTarget,
     dasher_trace_data : DasherTraceData,
     bullet_sys : BulletSystem,
-
-    scheme : u8,
 }
 
 impl StateData {
@@ -131,8 +129,6 @@ impl StateData {
                 dasher_trace_data : DasherTraceData::new(),
                 bullet_sys : BulletSystem::new(),
                 battlefield,
-
-                scheme : 0,
             }
         )
     }

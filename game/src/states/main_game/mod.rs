@@ -46,6 +46,23 @@ pub fn point_at(from : Point2<f32>, at : Point2<f32>) -> Option<Point2<f32>> {
     else { Some(<Point2<f32> as EuclideanSpace>::from_vec(pointer_v)) }
 }
 
+fn load_environment_params() -> (f32, f32) {
+    use std::fs::File;
+    use std::io::{ BufReader, BufRead };
+
+    let mut f = File::open("params.txt").expect("Params file not found");
+    let mut f = BufReader::new(f);
+
+    let mut line = String::new();
+    f.read_line(&mut line).expect("Failed to read friction expression");
+    let friction = line.trim().parse().expect("Failed to parse player mass expression");
+    line.clear();
+    f.read_line(&mut line).expect("Failed to read player mass expression");
+    let mass = line.trim().parse().expect("Failed to parse player mass expression");
+
+    (friction, mass)
+}
+
 pub struct StateData {
     player_ship_texture : Texture2d,
     sun_texture : Texture2d,
@@ -80,7 +97,7 @@ impl StateData {
         use ship_parts::collision_models::model_indices;
         battlefield.spawn(ship_parts::player_ship(Team::Earth, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
                 
-        GameState::MainGame(
+        let mut me =
             StateData {
                 //hive : Hive::new(),
                 //player : Player::new(),
@@ -98,7 +115,21 @@ impl StateData {
                 bullet_sys : BulletSystem::new(),
                 battlefield,
             }
-        )
+        ;
+        me.load_params();
+        GameState::MainGame(me)
+    }
+
+    fn load_params(&mut self) {
+        use ship_parts::storage_traits::FRICTION_KOEFF;
+
+        let (friction, player_mass) = load_environment_params();
+
+        unsafe { FRICTION_KOEFF = friction; }
+        match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
+            Some(player) => player.core.mass = player_mass,
+            _ => (),
+        }
     }
 
     pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> { 
@@ -120,6 +151,7 @@ impl StateData {
                 match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
                     Some(mut player) if player.core.is_alive() => {
                         match virtual_keycode {
+                            Some(event::VirtualKeyCode::U) => self.load_params(),
                             Some(event::VirtualKeyCode::W) => player.increase_speed(),
                             Some(event::VirtualKeyCode::S) => player.decrease_speed(),
                             Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
@@ -223,7 +255,7 @@ impl StateData {
             self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
             Some(ctx.viewport())
         );
-        let picker = vec2((0.05f32 * cam.x + 0.01f32) % 1.0f32, (0.05f32 * cam.y + 0.03f32) % 1.0f32);
+        let picker = vec2((0.05f32 * cam.x - 0.5f32) % 1.0f32, (0.05f32 * cam.y + 0.03f32) % 1.0f32);
         draw_sprite(
             ctx, &mut frame, 
             Matrix4::one(),

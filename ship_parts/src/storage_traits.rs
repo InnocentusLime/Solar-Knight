@@ -14,6 +14,8 @@ use sys_api::graphics_init::SpriteDataWriter;
 use glium::VertexBuffer;
 use cgmath::{ Matrix4, Point2, EuclideanSpace, InnerSpace, vec2 };
 
+pub static mut FRICTION_KOEFF : f32 = 0.5f32;
+
 pub trait ShipLayout<S> : Copy + Any + 'static {
     fn update(me : &mut Ship<Self>, dt : Duration);
 }
@@ -145,7 +147,7 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
     }
 
     pub fn update(&mut self, dt : Duration) {
-        const FRICTION_KOEFF : f32 = 0.5f32;
+        let friction_koeff = unsafe { FRICTION_KOEFF };
 
         self.earth.update(dt);
 
@@ -156,7 +158,7 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
                 (c.update)(c, dt);
                 if c.core.velocity.magnitude() > 0.0f32 {
                     //dbg!(c.core.velocity);
-                    c.core.force += FRICTION_KOEFF * (-c.core.velocity).normalize();
+                    c.core.force += friction_koeff * (-c.core.velocity).normalize();
                 }
                 c.core.velocity += (dt.as_secs_f32() / c.core.mass) * c.core.force;
                 c.core.velocity = c.core.velocity.mag_clamp(2.0f32);

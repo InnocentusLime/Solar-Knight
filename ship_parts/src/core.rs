@@ -1,4 +1,4 @@
-use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace };
+use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace, vec2 };
 
 //use collision::*;
 use crate::collision_models::{ CollisionModel, model_indices };
@@ -15,18 +15,24 @@ pub struct Core {
     hp : u64,
     model : CollisionModelIndex,
     team : Team,
+    pub mass : f32,
     pub pos : Point2<f32>,
     pub direction : Vector2<f32>,
+    pub force : Vector2<f32>,
+    pub velocity : Vector2<f32>,
 }
 
 impl Core {
-    pub fn new(hp : u64, model : CollisionModelIndex, team : Team, pos : Point2<f32>, direction : Vector2<f32>) -> Self {
+    pub fn new(hp : u64, mass : f32, model : CollisionModelIndex, team : Team, pos : Point2<f32>, direction : Vector2<f32>) -> Self {
         Core {
             hp,
             model,
             team,
             pos,
+            mass,
             direction,
+            force : vec2(0.0f32, 0.0f32),
+            velocity : vec2(0.0f32, 0.0f32),
         }
     }
 

@@ -46,27 +46,6 @@ pub fn point_at(from : Point2<f32>, at : Point2<f32>) -> Option<Point2<f32>> {
     else { Some(<Point2<f32> as EuclideanSpace>::from_vec(pointer_v)) }
 }
 
-struct DasherTraceData {
-    direction : Vector2<f32>,
-    position : Point2<f32>,
-}
-
-impl DasherTraceData {
-    fn new() -> Self {
-        DasherTraceData {
-            direction : vec2(0.0f32, 0.0f32),
-            position : point2(0.0f32, 0.0f32),
-        }
-    }
-
-    fn update(&mut self, player : &Ship<PlayerShip>, dash_direction : Vector2<f32>) {
-        use ship_parts::PlayerEngine;
-
-        self.position = player.core.pos;
-        self.direction = -(dash_direction + 0.7 * (player.layout.main_engine.get_speed() as f32 / PlayerEngine::MAX_LVL as f32) * player.core.direction);
-    }
-}
-
 pub struct StateData {
     player_ship_texture : Texture2d,
     sun_texture : Texture2d,
@@ -80,7 +59,6 @@ pub struct StateData {
 
     timer : Duration,
     pointer_target : PointerTarget,
-    dasher_trace_data : DasherTraceData,
     bullet_sys : BulletSystem,
 }
 
@@ -117,7 +95,6 @@ impl StateData {
 
                 timer : SPAWN_RATE,
                 pointer_target : PointerTarget::None,
-                dasher_trace_data : DasherTraceData::new(),
                 bullet_sys : BulletSystem::new(),
                 battlefield,
             }
@@ -140,22 +117,11 @@ impl StateData {
                 ..
             } => {
                 use ship_parts::PlayerShip;
-                let dasher_trace_data = &mut self.dasher_trace_data;
                 match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
                     Some(mut player) if player.core.is_alive() => {
                         match virtual_keycode {
                             Some(event::VirtualKeyCode::W) => player.increase_speed(),
                             Some(event::VirtualKeyCode::S) => player.decrease_speed(),
-                            Some(event::VirtualKeyCode::D) => {
-                                player.dash_right()
-                                .map_or((), |x| dasher_trace_data.update(player, x))
-                                // update the dash data
-                            },
-                            Some(event::VirtualKeyCode::A) => {
-                                player.dash_left()
-                                .map_or((), |x| dasher_trace_data.update(player, x))
-                                // update the dash data
-                            },
                             Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
                             Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
                             Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
@@ -203,6 +169,7 @@ impl StateData {
 
         match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
             Some(player) if player.core.is_alive() => {
+                //dbg!(player.core.velocity);
                 player.core.direction = input_tracker.mouse_position().normalize();
         
                 if input_tracker.is_mouse_button_down(MouseButton::Left) {
@@ -256,7 +223,7 @@ impl StateData {
             self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
             Some(ctx.viewport())
         );
-        let picker = vec2((0.05f32 * cam.x + 0.0001f32) % 1.0f32, (0.05f32 * cam.y + 0.0001f32) % 1.0f32);
+        let picker = vec2((0.05f32 * cam.x + 0.01f32) % 1.0f32, (0.05f32 * cam.y + 0.03f32) % 1.0f32);
         draw_sprite(
             ctx, &mut frame, 
             Matrix4::one(),
@@ -325,37 +292,6 @@ impl StateData {
             None => (),
         }
 
-        const PLAYER_DASH_TRACE_SPEED : f32 = 0.6f32;
-        // If we are doing the dash (player returns the dash parameter),
-        // draw the trace
-        self.battlefield
-        .get_downcasted::<PlayerShip>(0)
-        .and_then(|x| x.dash_trace_param())
-        .map_or(
-            (),
-            |t| {
-                let k = 2.0f32 * t;
-                let trace_direction = self.dasher_trace_data.direction;
-                let trace_pos = self.dasher_trace_data.position + (0.1f32 * (1.0f32 - t)) * trace_direction;
-                let model_mat = 
-                Matrix4::from_translation(trace_pos.to_vec().extend(0.0f32)) * 
-                Matrix4::new(
-                    trace_direction.x, trace_direction.y, 0.0f32, 0.0f32,
-                    -trace_direction.y, trace_direction.x, 0.0f32, 0.0f32,
-                    0.0f32, 0.0f32, 1.0f32, 0.0f32,
-                    0.0f32, 0.0f32, 0.0f32, 1.0f32,
-                ) * 
-                Matrix4::from_nonuniform_scale(k * 0.04f32, (k / 2.0f32 * 0.4f32 + 0.6f32) * 0.125f32, 1.0f32); 
-                draw_sprite(
-                    ctx, &mut frame, 
-                    vp * model_mat, 
-                    (0.0f32, 0.0f32, 1.0f32, 1.0f32),
-                    self.player_dash_trace_texture.sampled(), 
-                    Some(ctx.viewport())
-                )
-            }
-        );
-        
         frame.finish().unwrap();
     }
 }

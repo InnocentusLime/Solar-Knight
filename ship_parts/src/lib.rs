@@ -33,7 +33,7 @@ macro_rules! declare_ships {
             $($part_name:ident : $part_type:ty[$($arg:expr),*],)+
             [ai = $ai_proc:expr; data = $ai_data:ty]
             [render = $render_proc:expr] 
-            [spawn_hp = $spawn_hp:expr; collision = $collision:ident]
+            [spawn_hp = $spawn_hp:expr; collision = $collision:ident; mass = $mass:expr]
         }
         )+
     ) => {
@@ -66,6 +66,7 @@ macro_rules! declare_ships {
                     $name::new(), 
                     crate::core::Core::new(
                         $spawn_hp, 
+                        $mass,
                         crate::collision_models::model_indices::CollisionModelIndex::$collision, 
                         team, pos, dir
                     ),
@@ -155,15 +156,6 @@ declare_engine!(
     }
 );
 
-declare_engine!(
-    directed_soft_engine PlayerDash {
-        speed_mul : 6.0f32,
-        max_lvl : 1,
-        one_step_duration : std::time::Duration::from_millis(180),
-        change_curve : exponential_decrease_curve!(std::f32::consts::E / 2.1f32),
-    }
-);
-
 use sys_api::basic_graphics_data::SpriteData;
 use sys_api::graphics_init::SpriteDataWriter;
 fn test_render<S>(
@@ -192,6 +184,7 @@ fn test_render<S>(
     buff.put(dat);
 }
 
+/*
 pub fn enemy_tester_ai(
     me : &mut Ship<EnemyTester>,
     others : &std_ext::ExtractResultMut<ShipObject>, 
@@ -229,6 +222,7 @@ pub fn enemy_brute_ai(
         me.core.direction = (earth.pos() - me.core.pos).normalize();
     }
 }
+*/
 
 /*
 pub fn enemy_smartie_ai(
@@ -261,13 +255,12 @@ pub fn enemy_smartie_ai(
 declare_ships!(
     ship PlayerShip (player_ship) {
         main_engine : PlayerEngine[0],
-        dasher : PlayerDash[0],
         gun : TestGun[],
         [ai = no_ai::<PlayerShip>; data = ()]
         [render = test_render::<PlayerShip>]
-        [spawn_hp = 3; collision = Player]
+        [spawn_hp = 3; collision = Player; mass = 2.0f32]
     }
-
+/*
     ship EnemyTester (enemy_tester) {
         main_engine : TesterEnemyEngine[1],
         gun : TesterEnemyGun[],
@@ -283,6 +276,7 @@ declare_ships!(
         [render = test_render::<EnemyBrute>]
         [spawn_hp = 3; collision = Player]
     }
+*/
 );
 
 // Shortcut-controls for player's layout
@@ -292,42 +286,4 @@ impl Ship<PlayerShip> {
     
     #[inline]
     pub fn decrease_speed(&mut self) { self.layout.main_engine.decrease_speed() }
-
-    #[inline]
-    pub fn is_dashing(&self) -> bool {
-        self.layout.dasher.is_changing()
-    }
-
-    pub fn dash_right(&mut self) -> Option<Vector2<f32>> {
-        if !self.is_dashing() {
-            // Check `dash_left` for info about how it works
-            let direction = cgmath_ext::rotate_vector_ox(self.core.direction, vec2(0.0f32, -1.0f32));
-            self.layout.dasher.direction = direction;
-            self.layout.dasher.snap(1);
-            self.layout.dasher.decrease_speed();
-            // return the dash direction
-            Some(direction)
-        } else { None }
-    }
-    
-    pub fn dash_left(&mut self) -> Option<Vector2<f32>> {
-        if !self.is_dashing() {
-            // This code will make the engine
-            // update all its interior data to be `1`.
-            // We'll then call `decrease_speed` to make engine's
-            // speed decrease from 1 to 0.
-            let direction = cgmath_ext::rotate_vector_ox(self.core.direction, vec2(0.0f32, 1.0f32));
-            self.layout.dasher.direction = direction;
-            self.layout.dasher.snap(1);
-            self.layout.dasher.decrease_speed();
-            // return the dash direction
-            Some(direction)
-        } else { None }
-    }
-    
-    #[inline]
-    pub fn dash_trace_param(&self) -> Option<f32> {
-        if self.is_dashing() { Some(self.layout.dasher.get_speed()) }
-        else { None }
-    }
 }

@@ -222,7 +222,7 @@ impl BulletSystem {
                     // TestBullet's move towards with speed 
                     // equal to 4.0.
                     BulletKind::TestBullet => {
-                        bullet.pos += (3.0f32 * dt.as_secs_f32()) * bullet.direction;
+                        bullet.pos += (4.0f32 * dt.as_secs_f32()) * bullet.direction;
         
                         let my_body = collision_models::consts::BulletTester.apply_transform(&bullet.transform());
                         let my_aabb = my_body.aabb();

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use cgmath::{ Point2, EuclideanSpace, Angle, InnerSpace, Rad, Matrix4, vec2, point2 };
+use cgmath::{ Point2, EuclideanSpace, Matrix4, point2 };
 
 use std_ext::*;
 

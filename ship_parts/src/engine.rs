@@ -75,7 +75,7 @@ macro_rules! declare_engine {
 
         impl crate::part_trait::ShipPart for $name {
             #[inline]
-            fn update(&mut self, core : &mut $crate::core::Core, dt : std::time::Duration) {
+            fn update(&mut self, core : &mut $crate::core::Core, _dt : std::time::Duration) {
                 use cgmath::InnerSpace;
                 use $crate::constants::VECTOR_NORMALIZATION_RANGE;
                 

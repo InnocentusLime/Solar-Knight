@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn StdError>> {
     let mut last_frame = Instant::now();
     let mut tick_time_acc = Duration::new(0, 0);
     let tick_duration = Duration::new(1, 0) / TICKS_PER_SECOND;
-    let mut frame_duration = Duration::new(1, 0) / FRAMES_PER_SECOND;
+    let frame_duration = Duration::new(1, 0) / FRAMES_PER_SECOND;
 
     trace!("Starting loop");
     event_loop.run(move |event, _, control_flow| {

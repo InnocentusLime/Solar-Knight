@@ -1,7 +1,7 @@
 use glium::glutin;
 use glutin::window::{ WindowId, Window };
 use glutin::event::{ Event, WindowEvent, VirtualKeyCode, ElementState, MouseButton, KeyboardInput, DeviceEvent };
-use glutin::dpi::{ PhysicalSize, PhysicalPosition };
+use glutin::dpi::PhysicalSize;
 use cgmath::Vector2;
 
 use crate::graphics_init::SCREEN_WIDTH;
@@ -49,7 +49,7 @@ impl InputTracker {
                     state,
                     button,
                     ..
-                } => self.mouse_button_map[InputTracker::mouse_button_to_id(*button)] = (*state == ElementState::Pressed),
+                } => self.mouse_button_map[InputTracker::mouse_button_to_id(*button)] = *state == ElementState::Pressed,
                 _ => (),
             },
             Event::DeviceEvent {
@@ -62,7 +62,7 @@ impl InputTracker {
                         virtual_keycode : Some(code),
                         ..
                     }
-                ) => self.key_map[*code as usize] = (*state == ElementState::Pressed),
+                ) => self.key_map[*code as usize] = *state == ElementState::Pressed,
                 _ => (),
             },
             _ => (),

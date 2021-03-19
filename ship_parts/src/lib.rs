@@ -14,8 +14,6 @@ pub use crate::earth::Earth;
 pub use crate::gun::BulletSystem;
 pub use crate::storage_traits::{ Ship, ShipLayout, SuperShipLayout, Battlefield as BattlefieldBase };       
 
-use cgmath::{ Point2, Vector2, vec2, point2 };
-
 fn no_ai<T>(
     _me : &mut Ship<T>,
     _others : &std_ext::ExtractResultMut<ShipObject>, 
@@ -77,7 +75,9 @@ macro_rules! declare_ships {
         )+
 
         pub union ShipLayoutUnion {
-            $( $con : $name, )+
+            $( 
+                #[allow(dead_code)] $con : $name, 
+            )+
         }
 
         unsafe impl SuperShipLayout for ShipLayoutUnion {

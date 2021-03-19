@@ -8,8 +8,7 @@ use glutin::{ ContextBuilder, event_loop::EventLoop };
 use glium::glutin::window::WindowBuilder;
 use glium::debug::DebugCallbackBehavior;
 use glium::buffer::WriteMapping;
-use cgmath::prelude::Transform;
-use cgmath::{ Decomposed, Matrix4, Vector3, Point3, Quaternion, One, ortho };
+use cgmath::{ Decomposed, Matrix4, Vector3, Quaternion, One, ortho };
 
 use crate::verbose_try;
 use crate::basic_graphics_data::*;

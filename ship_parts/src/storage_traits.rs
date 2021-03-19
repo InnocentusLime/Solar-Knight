@@ -6,13 +6,12 @@ use crate::core::{ Core, Team };
 use crate::gun::{ BulletSystem, TargetSystem };
 
 use cgmath_ext::VectorExt;
-use std_ext::{ ExtractResultMut, SliceExt };
-use std_ext::collections::MemoryChunk;
+use std_ext::ExtractResultMut;
 use sys_api::basic_graphics_data::SpriteData;
 use sys_api::graphics_init::SpriteDataWriter;
 
 use glium::VertexBuffer;
-use cgmath::{ Matrix4, Point2, EuclideanSpace, InnerSpace, vec2 };
+use cgmath::{ Matrix4, EuclideanSpace, InnerSpace, vec2 };
 
 pub static mut FRICTION_KOEFF : f32 = 0.5f32;
 
@@ -156,8 +155,7 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
             |c| {
                 c.core.force = vec2(0.0f32, 0.0f32);
                 (c.update)(c, dt);
-                if c.core.velocity.magnitude() > 0.0f32 {
-                    //dbg!(c.core.velocity);
+                if c.core.velocity.magnitude() > crate::constants::VECTOR_NORMALIZATION_RANGE {
                     c.core.force += friction_koeff * (-c.core.velocity).normalize();
                 }
                 c.core.velocity += (dt.as_secs_f32() / c.core.mass) * c.core.force;
@@ -186,7 +184,7 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
     }
             
     pub fn fill_buffer(&self, buff : &mut VertexBuffer<SpriteData>) {
-        use sys_api::graphics_init::{ SpriteDataWriter, ENEMY_LIMIT };
+        use sys_api::graphics_init::{ ENEMY_LIMIT };
                 
         let mut ptr = buff.map_write();
 

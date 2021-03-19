@@ -1,28 +1,17 @@
 use std::time::Duration;
 
-use log::{ trace, info, warn };
-use cgmath::{ EuclideanSpace, InnerSpace, One, Rad, Angle, Vector2, Point2, vec2, point2 };
+use cgmath::{ EuclideanSpace, InnerSpace, One, Point2, vec2, point2 };
 use glium::glutin;
 use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
-use glutin::event::{ VirtualKeyCode, MouseButton };
+use glutin::event::{ MouseButton };
 
-use sys_api::basic_graphics_data::SpriteData;
-use ship_parts::{ BulletSystem, gun::{ TESTER_BULLET_SIZE }, Team, Ship, PlayerShip, Battlefield };
+use ship_parts::{ BulletSystem, Team, PlayerShip, Battlefield };
 use super::{ GameState, TransitionRequest, main_menu };
-use std_ext::collections::memory_chunk::MemoryChunk;
 use std_ext::*;
-use sys_api::graphics_init::{ RenderTargets, GraphicsContext, ENEMY_LIMIT, PLAYER_BULLET_LIMIT };
+use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
 use crate::loaders::texture_load_from_file;
-
-mod ships;
-//mod enemies;
-//mod player;
-
-use ships::*;
-//use player::*;
-//use enemies::{ Hive, Enemy, tester::Tester };
 
 const SPAWN_RATE : Duration = Duration::from_secs(3);
 
@@ -50,7 +39,7 @@ fn load_environment_params() -> (f32, f32) {
     use std::fs::File;
     use std::io::{ BufReader, BufRead };
 
-    let mut f = File::open("params.txt").expect("Params file not found");
+    let f = File::open("params.txt").expect("Params file not found");
     let mut f = BufReader::new(f);
 
     let mut line = String::new();
@@ -70,7 +59,7 @@ pub struct StateData {
     basic_enemy_ship_texture : Texture2d,
     background_texture : Texture2d,
     player_bullet_texture : Texture2d,
-    player_dash_trace_texture : Texture2d,
+    //player_dash_trace_texture : Texture2d,
 
     battlefield : Battlefield,
 
@@ -80,21 +69,17 @@ pub struct StateData {
 }
 
 impl StateData {
-    pub fn init(ctx : &mut GraphicsContext, old : GameState) -> GameState {
-        use sys_api::graphics_init::ENEMY_BULLET_LIMIT;
-
+    pub fn init(ctx : &mut GraphicsContext, _old : GameState) -> GameState {
         let sun_texture = texture_load_from_file(&ctx.display, "textures/sun.png").unwrap();
         let player_ship_texture = texture_load_from_file(&ctx.display, "textures/player_ship.png").unwrap();
         let earth_texture = texture_load_from_file(&ctx.display, "textures/earth.png").unwrap();
         let basic_enemy_ship_texture = texture_load_from_file(&ctx.display, "textures/basic_enemy_ship.png").unwrap();
         let player_bullet_texture = texture_load_from_file(&ctx.display, "textures/player_bullet.png").unwrap();
-        let player_dash_trace_texture = texture_load_from_file(&ctx.display, "textures/player_dash_trace.png").unwrap();
+        //let player_dash_trace_texture = texture_load_from_file(&ctx.display, "textures/player_dash_trace.png").unwrap();
         let background_texture = texture_load_from_file(&ctx.display, "textures/background_game.png").unwrap();
 
         let mut battlefield = Battlefield::new();
 
-        use ship_parts::core::Team;
-        use ship_parts::collision_models::model_indices;
         battlefield.spawn(ship_parts::player_ship(Team::Earth, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
                 
         let mut me =
@@ -108,7 +93,7 @@ impl StateData {
                 earth_texture,
                 basic_enemy_ship_texture,
                 player_bullet_texture,
-                player_dash_trace_texture,
+                //player_dash_trace_texture,
 
                 timer : SPAWN_RATE,
                 pointer_target : PointerTarget::None,
@@ -132,7 +117,7 @@ impl StateData {
         }
     }
 
-    pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> { 
+    pub fn process_event(&mut self, _ctx : &mut GraphicsContext, _input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> { 
         use glutin::event;
 
         match event {
@@ -147,9 +132,8 @@ impl StateData {
                 ),
                 ..
             } => {
-                use ship_parts::PlayerShip;
                 match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
-                    Some(mut player) if player.core.is_alive() => {
+                    Some(player) if player.core.is_alive() => {
                         match virtual_keycode {
                             Some(event::VirtualKeyCode::U) => self.load_params(),
                             Some(event::VirtualKeyCode::W) => player.increase_speed(),
@@ -170,12 +154,6 @@ impl StateData {
     }
 
     pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, dt : Duration) -> Option<TransitionRequest> {
-        use cgmath::{ vec2, dot };
-        use cgmath::{ Transform, Angle, InnerSpace, Matrix4 };
-
-        use std::ops::{ Add, Sub };
-        use ship_parts::PlayerShip;
-
         if let Some(player) = self.battlefield.get(0) {
             assert!(player.core.team() == Team::Earth);
             if !player.core.is_alive() { 
@@ -185,16 +163,17 @@ impl StateData {
         } else { panic!("No player!"); }
 
         if self.timer.my_is_zero() {
-            const SPAWN_DISTANCE : f32 = 5.0f32;
+            //const SPAWN_DISTANCE : f32 = 5.0f32;
 
             self.timer = SPAWN_RATE;
-            //self.battlefield.spawn(ship_parts::enemy_tester(Team::Hive, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
+            /*
             let n = rand::random::<u16>() % 40;
             let u = (std::f32::consts::TAU / 40.0f32) * (n as f32);
             let (s, c) = u.sin_cos();
             let (x, y) = (c * SPAWN_DISTANCE, s * SPAWN_DISTANCE);
             //dbg!((x, y));
-            //self.battlefield.spawn(ship_parts::enemy_brute(Team::Hive, point2(x, y), vec2(0.0f32, 1.0f32)));
+            self.battlefield.spawn(ship_parts::enemy_brute(Team::Hive, point2(x, y), vec2(0.0f32, 1.0f32)));
+            */
         } else { // TODO introduce enemy limit
             self.timer = self.timer.my_saturating_sub(dt);
         }
@@ -233,12 +212,11 @@ impl StateData {
         None
     }
 
-    pub fn render(&self, ctx : &mut GraphicsContext, targets : &mut RenderTargets, _input_tracker : &InputTracker) {
-        use glium::{ draw_parameters, index, Surface, Blend, Rect, uniform };
-        use cgmath::{ Transform, Matrix4, vec2, vec3 };
+    pub fn render(&self, ctx : &mut GraphicsContext, _targets : &mut RenderTargets, _input_tracker : &InputTracker) {
+        use glium::Surface;
+        use cgmath::Matrix4;
 
         use sys_api::graphics_utils::{ draw_sprite, draw_instanced_sprite };
-        use sys_api::graphics_init::{ ASPECT_RATIO, ENEMY_BULLET_LIMIT };
 
         let mut frame = ctx.display.draw();
         frame.clear_color(0.0, 0.0, 0.0, 1.0);
@@ -246,11 +224,13 @@ impl StateData {
         let vp = ctx.build_projection_view_matrix();
 
         // Drawing paralaxed background
+        //use sys_api::graphics_init::ASPECT_RATIO;
         let cam = -ctx.camera.disp.truncate(); 
         let picker = vec2((0.2f32 * cam.x) % 1.0f32, (0.2f32 * cam.y) % 1.0f32);
         draw_sprite(
             ctx, &mut frame, 
             Matrix4::one(),
+//            (picker.x / SCREEN_WIDTH, picker.y, 1.0f32, 1.0f32),
             (picker.x, picker.y, 1.0f32, 1.0f32),
             self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
             Some(ctx.viewport())
@@ -259,6 +239,7 @@ impl StateData {
         draw_sprite(
             ctx, &mut frame, 
             Matrix4::one(),
+//            (picker.x / SCREEN_WIDTH, picker.y, 1.0f32, 1.0f32),
             (picker.x, picker.y, 1.0f32, 1.0f32),
             self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
             Some(ctx.viewport())

@@ -1,10 +1,10 @@
 use glium::{ draw_parameters, index, VertexBuffer, Surface, Blend, Rect, uniform };
 use glium::texture::texture2d::Texture2d;
 use glium::uniforms::Sampler;
-use cgmath::{ Matrix4, Vector2 };
+use cgmath::Matrix4;
 
 use crate::basic_graphics_data::SpriteData;
-use crate::graphics_init::{ GraphicsContext, ASPECT_RATIO };
+use crate::graphics_init::GraphicsContext;
 
 pub fn draw_sprite<S : Surface>(
     ctx : &GraphicsContext, 
@@ -15,7 +15,7 @@ pub fn draw_sprite<S : Surface>(
     viewport : Option<Rect>
 ) {
     use glium::uniforms::{ MinifySamplerFilter, MagnifySamplerFilter };
-    use cgmath::conv::{ array2, array4x4 };
+    use cgmath::conv::array4x4;
 
     let mut draw_params = draw_parameters::DrawParameters::default();
     draw_params.blend = Blend::alpha_blending();
@@ -41,7 +41,7 @@ pub fn draw_sprite<S : Surface>(
 
 pub fn draw_instanced_sprite<S : Surface>(ctx : &GraphicsContext, target : &mut S, instance_data : &VertexBuffer<SpriteData>, vp : Matrix4<f32>, texture : Sampler<Texture2d>, viewport : Option<Rect>) {
     use glium::uniforms::{ MinifySamplerFilter, MagnifySamplerFilter };
-    use cgmath::conv::{ array2, array4x4 };
+    use cgmath::conv::array4x4;
 
     let mut draw_params = draw_parameters::DrawParameters::default();
     draw_params.blend = Blend::alpha_blending();

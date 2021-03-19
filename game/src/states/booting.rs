@@ -13,7 +13,7 @@ pub struct StateData {
 }
 
 impl StateData {
-    pub fn init(ctx : &mut GraphicsContext) -> GameState {
+    pub fn init(_ctx : &mut GraphicsContext) -> GameState {
         GameState::Booting(
             StateData {
                 frame_counter : 0,
@@ -21,9 +21,9 @@ impl StateData {
         )
     }
 
-    pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> { None }
+    pub fn process_event(&mut self, _ctx : &mut GraphicsContext, _input_tracker : &InputTracker, _event : &glutin::event::Event<()>) -> Option<TransitionRequest> { None }
 
-    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, _ : Duration) -> Option<TransitionRequest> {
+    pub fn update(&mut self, _ctx : &mut GraphicsContext, _input_tracker : &InputTracker, _dt : Duration) -> Option<TransitionRequest> {
         use super::main_menu;
 
         if self.frame_counter >= SLEEP_FRAMES {
@@ -31,5 +31,5 @@ impl StateData {
         } else { self.frame_counter += 1; None }
     }
 
-    pub fn render(&self, ctx : &mut GraphicsContext, _ : &mut RenderTargets, input_tracker : &InputTracker) {}
+    pub fn render(&self, _ctx : &mut GraphicsContext, _targets : &mut RenderTargets, _input_tracker : &InputTracker) {}
 }

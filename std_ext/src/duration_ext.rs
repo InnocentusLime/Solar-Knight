@@ -15,6 +15,8 @@ pub trait DurationExt {
 mod my_rem_impl {
     use std::time::Duration;
 
+    // Used in correctness tests
+    #[test]
     pub fn my_rem_impl_soft(me : Duration, other : Duration) -> Duration {
         use super::DurationExt;
 

@@ -1,4 +1,4 @@
-use cgmath::{ BaseFloat, Vector2, InnerSpace, VectorSpace };
+use cgmath::{ Vector2, InnerSpace, VectorSpace };
 
 pub trait VectorExt : VectorSpace + InnerSpace + Sized {
     fn mag_clamp(self, mag : <Self as VectorSpace>::Scalar) -> Self;

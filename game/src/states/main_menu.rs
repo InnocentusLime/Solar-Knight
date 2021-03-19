@@ -4,7 +4,7 @@ use glium::glutin;
 use glium::texture::texture2d::Texture2d;
 
 use super::{ GameState, TransitionRequest }; 
-use sys_api::graphics_init::{ RenderTargets, GraphicsContext, SCREEN_WIDTH };
+use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use crate::loaders::texture_load_from_file; 
 use sys_api::input_tracker::InputTracker;
 use super::main_game;
@@ -15,7 +15,7 @@ pub struct StateData {
 }
 
 impl StateData {
-    pub fn init(ctx : &mut GraphicsContext, old : GameState) -> GameState {
+    pub fn init(ctx : &mut GraphicsContext, _old : GameState) -> GameState {
         GameState::MainMenu(
             StateData {
                 background_texture : texture_load_from_file(&ctx.display, "textures/background.png").unwrap(), 
@@ -24,7 +24,7 @@ impl StateData {
         )
     }
 
-    pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> {
+    pub fn process_event(&mut self, _ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> {
         match event {
             glutin::event::Event::WindowEvent {
                 event : glutin::event::WindowEvent::MouseInput { 
@@ -48,8 +48,8 @@ impl StateData {
     }
 
     pub fn render(&self, ctx : &mut GraphicsContext, _ : &mut RenderTargets, _input_tracker : &InputTracker) {
-        use glium::{ draw_parameters, index, Surface, Blend, uniform };
-        use cgmath::{ One, Matrix4, vec2, vec3 };
+        use glium::Surface;
+        use cgmath::{ One, Matrix4 };
 
         use sys_api::graphics_utils::draw_sprite;
 

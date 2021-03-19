@@ -14,7 +14,7 @@ pub fn load_from_file<F : Facade, P : AsRef<Path>>(f : &F, p : P) -> Result<Text
 
     let img = 
         match image::open(p) {
-            Ok(x) => Some(x.to_rgba()),
+            Ok(x) => Some(x.to_rgba8()),
             Err(err) => { error!(target : "load_texture", "failed to load texture. Error:\n {}\nThe texture will be replaced with \"missing_tex\"", err); None },
         }
     ;

@@ -8,7 +8,7 @@ use std_ext::collections::memory_chunk::MemoryChunk;
 use sys_api::graphics_init::PLAYER_BULLET_LIMIT;
 use cgmath_ext::matrix3_from_translation;
 
-use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace, InnerSpace, vec2 };
+use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace, InnerSpace };
 
 pub const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
 
@@ -200,7 +200,7 @@ impl BulletSystem {
 
     // FIXME just iterating over all enemies probably sucks.
     // TODO the interface to the hive (`I` must also have a way to random-access enemies)
-    pub fn update<I>(&mut self, mut c : &mut I, dt : Duration) 
+    pub fn update<I>(&mut self, c : &mut I, dt : Duration) 
     where
         for<'a> I : TargetSystem<'a>
     {
@@ -285,7 +285,7 @@ impl BulletSystem {
         // Post processing
         self.mem.iter_mut()
         .for_each(
-            |bullet| {
+            |_bullet| {
                 // Nothing for now
             }
         );

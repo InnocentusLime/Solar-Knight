@@ -1,4 +1,4 @@
-use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace, vec2 };
+use cgmath::{ Point2, Vector2, Matrix3, EuclideanSpace, vec2 };
 
 //use collision::*;
 use crate::collision_models::{ CollisionModel, model_indices };

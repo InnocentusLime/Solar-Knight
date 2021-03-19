@@ -1,10 +1,11 @@
 use std::borrow::{ Borrow, BorrowMut };
-use cgmath::{ SquareMatrix, EuclideanSpace, InnerSpace, Transform, Rad, Matrix4, Point2, Vector2, Vector4, vec2, vec4, dot };
+use cgmath::{ EuclideanSpace, InnerSpace, Transform, Point2, vec2, dot };
 
 fn max(x : f32, y : f32) -> f32 { x.max(y) }
 
 fn min(x : f32, y : f32) -> f32 { x.min(y) }
 
+/*
 static AXIS_ALIGNED_SQUARE : [Point2<f32>; 4] =
 [
     Point2 { x : -1.0f32, y : -1.0f32 },
@@ -12,6 +13,7 @@ static AXIS_ALIGNED_SQUARE : [Point2<f32>; 4] =
     Point2 { x : 1.0f32, y : 1.0f32 },
     Point2 { x : 1.0f32, y : -1.0f32 },
 ];
+*/
 
 #[derive(Clone, Copy)]
 pub struct AxisAlignedBoundingBox {

@@ -11,6 +11,30 @@ pub enum Team {
     Earth,
 }
 
+/// # Description
+/// The core of the ship. 
+/// This struct contains commons data that is owned
+/// by every ship. This includes:
+/// - Hitpoints
+/// - Collision model index
+/// - Team id
+/// - Mass
+/// - Position
+/// - Direction
+/// - Current force
+/// - Velocity
+///
+/// # Invariants
+/// There are some invariants that the inner data must satisfy
+/// - Mass must be positive
+/// - Direction must be a unit vector
+/// - Mass, pos, direction, force, velocity must be all finite vectors
+///
+/// # Technical details
+/// It is absolutely fine for a ship to have 0hp. This state might
+/// be used to do some behaviour to emulate a death state for a boss.
+// TODO consider inlining `Core` into `Ship`
+// FIXME `mass`, `force`, `velocity` and `direction`, `pos` should be protected
 pub struct Core {
     hp : u64,
     model : CollisionModelIndex,
@@ -73,4 +97,15 @@ impl Core {
         self.model.decypher()
         .apply_transform(&self.transform())
     }
+
+    #[inline]
+    pub fn direction(&self) -> Vector2<f32> {
+        self.direction
+    }
+
+    #[inline]
+    pub fn set_direction(&mut self, dir : Vector<f32>) {
+        assert!();
+        self.direction = dir;
+    } 
 }

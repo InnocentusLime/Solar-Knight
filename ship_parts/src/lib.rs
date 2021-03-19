@@ -1,3 +1,8 @@
+// TODO-FIXME ALL THE VECTORS IN SHIPS SHOULD BE CHECKED
+// Last meeting it turned out that somewhere in the code there's
+// a possibility to `NaN` or `Inf` the vectors which causes the 
+// computations to collapse. This must be fixed.
+
 pub mod engine;
 pub mod gun;
 pub mod core;

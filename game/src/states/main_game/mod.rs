@@ -1,11 +1,13 @@
 use std::time::Duration;
 
+use cgmath::abs_diff_ne;
 use cgmath::{ EuclideanSpace, InnerSpace, One, Point2, vec2, point2 };
 use glium::glutin;
 use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
 use glutin::event::{ MouseButton };
 
+use ship_parts::constants::VECTOR_NORMALIZATION_RANGE;
 use ship_parts::{ BulletSystem, Team, PlayerShip, Battlefield };
 use super::{ GameState, TransitionRequest, main_menu };
 use std_ext::*;
@@ -181,7 +183,10 @@ impl StateData {
         match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
             Some(player) if player.core.is_alive() => {
                 //dbg!(player.core.velocity);
-                player.core.direction = input_tracker.mouse_position().normalize();
+                let mouse_pos = input_tracker.mouse_position();
+                if abs_diff_ne!(mouse_pos.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
+                    player.core.set_direction(mouse_pos.normalize());
+                }
         
                 if input_tracker.is_mouse_button_down(MouseButton::Left) {
                     player.layout.gun.shoot(&player.core)

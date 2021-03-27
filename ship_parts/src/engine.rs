@@ -76,11 +76,7 @@ macro_rules! declare_engine {
         impl crate::part_trait::ShipPart for $name {
             #[inline]
             fn update(&mut self, core : &mut $crate::core::Core, _dt : std::time::Duration) {
-                use cgmath::InnerSpace;
-                use $crate::constants::VECTOR_NORMALIZATION_RANGE;
-                
-                debug_assert!((core.direction.magnitude() - 1.0f32).abs() < VECTOR_NORMALIZATION_RANGE);
-                let direction = self.map_direction(core.direction);
+                let direction = self.map_direction(core.direction());
                 let force = (Self::SPEED * self.current_mul as f32) * direction;
                 core.force += force;
             }

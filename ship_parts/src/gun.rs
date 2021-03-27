@@ -143,7 +143,7 @@ macro_rules! declare_gun (
                 if self.can_shoot() {
                     self.timer = Self::RECOIL;
                     let off = self.map_direction(Self::OFFSET);
-                    let bullet_dir = self.map_direction(owner.direction);
+                    let bullet_dir = self.map_direction(owner.direction());
 
                     Some(
                         $crate::gun::Bullet::$bullet(

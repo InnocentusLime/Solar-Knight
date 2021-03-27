@@ -11,7 +11,7 @@ use sys_api::basic_graphics_data::SpriteData;
 use sys_api::graphics_init::SpriteDataWriter;
 
 use glium::VertexBuffer;
-use cgmath::{ Matrix4, EuclideanSpace, InnerSpace, vec2 };
+use cgmath::{ Matrix4, EuclideanSpace, InnerSpace, vec2, abs_diff_ne };
 
 pub static mut FRICTION_KOEFF : f32 = 0.5f32;
 
@@ -60,10 +60,12 @@ impl<S : 'static> Ship<S> {
 
     #[inline]
     pub fn model_mat(&self, size : (f32, f32)) -> Matrix4<f32> {
+        let direction = self.core.direction();
+
         Matrix4::from_translation(self.core.pos.to_vec().extend(0.0f32)) * 
         Matrix4::new(
-            self.core.direction.y, -self.core.direction.x, 0.0f32, 0.0f32,
-            self.core.direction.x, self.core.direction.y, 0.0f32, 0.0f32,
+            direction.y, -direction.x, 0.0f32, 0.0f32,
+            direction.x, direction.y, 0.0f32, 0.0f32,
             0.0f32, 0.0f32, 1.0f32, 0.0f32,
             0.0f32, 0.0f32, 0.0f32, 1.0f32,
         ) * 
@@ -146,6 +148,8 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
     }
 
     pub fn update(&mut self, dt : Duration) {
+        use crate::constants::VECTOR_NORMALIZATION_RANGE;
+
         let friction_koeff = unsafe { FRICTION_KOEFF };
 
         self.earth.update(dt);
@@ -155,7 +159,7 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
             |c| {
                 c.core.force = vec2(0.0f32, 0.0f32);
                 (c.update)(c, dt);
-                if c.core.velocity.magnitude() > crate::constants::VECTOR_NORMALIZATION_RANGE {
+                if abs_diff_ne!(c.core.velocity.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
                     c.core.force += friction_koeff * (-c.core.velocity).normalize();
                 }
                 c.core.velocity += (dt.as_secs_f32() / c.core.mass) * c.core.force;

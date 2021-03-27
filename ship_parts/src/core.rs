@@ -1,6 +1,8 @@
-use cgmath::{ Point2, Vector2, Matrix3, EuclideanSpace, vec2 };
+use cgmath::assert_abs_diff_eq;
+use cgmath::{ Point2, Vector2, Matrix3, EuclideanSpace, InnerSpace, vec2 };
 
 //use collision::*;
+use crate::constants::VECTOR_NORMALIZATION_RANGE;
 use crate::collision_models::{ CollisionModel, model_indices };
 use model_indices::*;
 use cgmath_ext::matrix3_from_translation;
@@ -27,7 +29,6 @@ pub enum Team {
 /// # Invariants
 /// There are some invariants that the inner data must satisfy
 /// - Mass must be positive
-/// - Direction must be a unit vector
 /// - Mass, pos, direction, force, velocity must be all finite vectors
 ///
 /// # Technical details
@@ -41,13 +42,15 @@ pub struct Core {
     team : Team,
     pub mass : f32,
     pub pos : Point2<f32>,
-    pub direction : Vector2<f32>,
+    direction : Vector2<f32>,
     pub force : Vector2<f32>,
     pub velocity : Vector2<f32>,
 }
 
 impl Core {
     pub fn new(hp : u64, mass : f32, model : CollisionModelIndex, team : Team, pos : Point2<f32>, direction : Vector2<f32>) -> Self {
+        assert!((direction.magnitude() - 1.0f32).abs() < VECTOR_NORMALIZATION_RANGE);
+
         Core {
             hp,
             model,
@@ -103,9 +106,15 @@ impl Core {
         self.direction
     }
 
+    /// # Description
+    /// Changes the direction of the ship.
+    ///
+    /// # Panics
+    /// Panics when the direction argument is not a unit vector.
     #[inline]
-    pub fn set_direction(&mut self, dir : Vector<f32>) {
-        assert!();
-        self.direction = dir;
+    pub fn set_direction(&mut self, direction : Vector2<f32>) {
+        assert!(direction.x.is_finite()); assert!(direction.y.is_finite());
+        assert_abs_diff_eq!(direction.magnitude(), 1.0f32, epsilon = VECTOR_NORMALIZATION_RANGE);
+        self.direction = direction;
     } 
 }

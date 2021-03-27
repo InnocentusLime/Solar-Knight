@@ -5,13 +5,12 @@ use crate::earth::Earth;
 use crate::core::{ Core, Team };
 use crate::gun::{ BulletSystem, TargetSystem };
 
-use cgmath_ext::VectorExt;
 use std_ext::ExtractResultMut;
 use sys_api::basic_graphics_data::SpriteData;
 use sys_api::graphics_init::SpriteDataWriter;
 
 use glium::VertexBuffer;
-use cgmath::{ Matrix4, EuclideanSpace, InnerSpace, vec2, abs_diff_ne };
+use cgmath::{ Matrix4, EuclideanSpace, InnerSpace, vec2, abs_diff_ne, abs_diff_eq };
 
 pub static mut FRICTION_KOEFF : f32 = 0.5f32;
 
@@ -159,11 +158,13 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
             |c| {
                 c.core.force = vec2(0.0f32, 0.0f32);
                 (c.update)(c, dt);
-                if abs_diff_ne!(c.core.velocity.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
+                //dbg!(c.core.velocity.magnitude()); 
+                if 
+                    abs_diff_ne!(c.core.velocity.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) 
+                {
                     c.core.force += friction_koeff * (-c.core.velocity).normalize();
                 }
                 c.core.velocity += (dt.as_secs_f32() / c.core.mass) * c.core.force;
-                c.core.velocity = c.core.velocity.mag_clamp(2.0f32);
                 c.core.pos += dt.as_secs_f32() * c.core.velocity;
             }
         );

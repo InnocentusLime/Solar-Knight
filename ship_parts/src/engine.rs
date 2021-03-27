@@ -32,6 +32,7 @@ macro_rules! declare_engine {
         impl $name {
             pub const SPEED : f32 = $speed_mul;
             pub const MAX_LVL : u64 = $max_lvl;
+            pub const MAX_SPEED : f32 = Self::SPEED * (Self::MAX_LVL as f32);
             pub const DIRECTION : cgmath::Vector2<f32> = cgmath::vec2($dir_x, $dir_y);
 
             pub fn new(start : u64) -> Self {
@@ -76,9 +77,21 @@ macro_rules! declare_engine {
         impl crate::part_trait::ShipPart for $name {
             #[inline]
             fn update(&mut self, core : &mut $crate::core::Core, _dt : std::time::Duration) {
+                use cgmath::{ InnerSpace, abs_diff_ne };
+
+                use $crate::constants::VECTOR_NORMALIZATION_RANGE;
+                
                 let direction = self.map_direction(core.direction());
-                let force = (Self::SPEED * self.current_mul as f32) * direction;
-                core.force += force;
+                let speed;
+                if core.velocity.magnitude() >= (self.current_mul as f32) * Self::SPEED {
+                    speed = (self.current_mul as f32) * Self::SPEED;
+                } else { speed = 0.0f32; }
+                core.force += (Self::SPEED * self.current_mul as f32) * direction;
+                if 
+                    abs_diff_ne!(core.velocity.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) 
+                {
+                    core.force -= speed * (core.velocity.normalize());
+                }
             }
         }
     };

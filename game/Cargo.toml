@@ -12,9 +12,13 @@ glium = "0.29.0"
 log = "*"
 image = "*"
 rand = "0.8.3"
+lazy_static = "1.4.0"
 
 sys_api = { path = "../sys_api" }
 collision = { path = "../collision" }
 ship_parts = { path = "../ship_parts" }
 std_ext = { path = "../std_ext" }
 cgmath_ext = { path = "../cgmath_ext" }
+
+#[dependencies.rags]
+#path = "../../rags"

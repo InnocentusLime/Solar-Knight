@@ -2,13 +2,14 @@ use std::time::Duration;
 
 use glium::VertexBuffer;
 
+use cgmath_ext::rotate_vector_oy;
 use super::core::{ Core, Team };
 use sys_api::basic_graphics_data::SpriteData;
-use std_ext::collections::memory_chunk::MemoryChunk;
+use std_ext::{ collections::memory_chunk::MemoryChunk, duration_ext::* };
 use sys_api::graphics_init::PLAYER_BULLET_LIMIT;
 use cgmath_ext::matrix3_from_translation;
 
-use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace, InnerSpace };
+use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace, InnerSpace, point2, vec2 };
 
 pub const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
 
@@ -94,88 +95,69 @@ impl Bullet {
     }
 }
 
-// TODO directed gun (ammo_gun is actually needed too)
-#[macro_export]
-macro_rules! declare_gun (
-    (
-        inf_gun $name:ident {
-            offset : $offset:expr,
-            bullet_kind : $bullet:ident,
-            recoil : $recoil:expr,
-            direction : $direction:expr,
+#[derive(Clone, Copy, Debug)]
+pub struct Gun {
+    offset : Vector2<f32>,
+    bullet_maker : fn(Point2<f32>, Vector2<f32>, Team) -> Bullet,
+    recoil : Duration,
+    timer : Duration,
+    direction : Vector2<f32>,
+}
+
+impl Gun {
+    pub fn new(
+        offset : Vector2<f32>,
+        bullet_maker : fn(Point2<f32>, Vector2<f32>, Team) -> Bullet,
+        recoil : Duration,
+        direction : Vector2<f32>,
+    ) -> Self {
+        // FIXME direction check
+
+        Gun {
+            offset,
+            bullet_maker,
+            recoil,
+            timer : <Duration as DurationExt>::my_zero(),
+            direction,
         }
-    ) => {
-        #[derive(Clone, Copy)]
-        pub struct $name {
-            timer : std::time::Duration,    
-        }
-
-        impl $name {
-            pub const OFFSET : cgmath::Vector2<f32> = $offset;
-            pub const RECOIL : std::time::Duration = $recoil;
-            pub const DIRECTION : cgmath::Vector2<f32> = $direction;
-
-            pub fn new() -> Self {
-                $name {
-                    timer : <std::time::Duration as std_ext::DurationExt>::my_zero(),
-                }
-            }
-
-            #[inline]
-            pub fn can_shoot(&self) -> bool {
-                use std_ext::*;
-
-                self.timer.my_is_zero()
-            }
+    }
             
-            #[inline]
-            pub fn map_direction(&self, direction : cgmath::Vector2<f32>) -> cgmath::Vector2<f32> {
-                use cgmath::vec2;
+    #[inline]
+    pub fn can_shoot(&self) -> bool {
+        self.timer.my_is_zero()
+    }
+            
+    pub fn shoot(&mut self, owner : &crate::core::Core) -> Option<crate::gun::Bullet> {
+        if self.can_shoot() {
+            self.timer = self.recoil;
+            let off = rotate_vector_oy(owner.direction(), self.offset);
+            let bullet_dir = rotate_vector_oy(owner.direction(), self.direction);
 
-                vec2(
-                    Self::DIRECTION.y * direction.x + Self::DIRECTION.x * direction.y,
-                    -Self::DIRECTION.x * direction.x + Self::DIRECTION.y * direction.y,
+            Some(
+                (self.bullet_maker)(
+                    owner.pos + off,
+                    bullet_dir,
+                    owner.team(),
                 )
-            }
+            )
+        } else { None }
+    }
+            
+    pub fn update(&mut self, _core : &mut crate::core::Core, dt : std::time::Duration) {
+        self.timer = self.timer.my_saturating_sub(dt);
+    }
+}
 
-            #[inline]
-            pub fn shoot(&mut self, owner : &$crate::core::Core) -> Option<$crate::gun::Bullet> {
-                if self.can_shoot() {
-                    self.timer = Self::RECOIL;
-                    let off = self.map_direction(Self::OFFSET);
-                    let bullet_dir = self.map_direction(owner.direction());
-
-                    Some(
-                        $crate::gun::Bullet::$bullet(
-                            owner.pos + off,
-                            bullet_dir,
-                            owner.team(),
-                        )
-                    )
-                } else { None }
-            }
-        }
-
-        impl crate::part_trait::ShipPart for $name {
-            fn update(&mut self, _core : &mut crate::core::Core, dt : std::time::Duration) {
-                use std_ext::*;
-                
-                self.timer = self.timer.my_saturating_sub(dt);
-            }
-        }
-    };
-    (
-        ammo_gun $name:ident {
-            offset : $offset:expr,
-            bullet_kind : $bullet:ident,
-            recoil : $recoil:expr,
-            direction : $direction:expr,
-            ammo : $ammo:expr,
-        }
-    ) => {
-        pub struct $name;
-    };
-);
+impl Default for Gun {
+    fn default() -> Gun {
+        Gun::new(
+            vec2(0.0f32, 0.0f32),
+            Bullet::tester_bullet,
+            <Duration as DurationExt>::my_zero(),
+            vec2(0.0f32, 1.0f32)
+        )
+    }
+}
 
 pub trait TargetSystem<'a> {
     type Iter : Iterator<Item = &'a mut Core>;

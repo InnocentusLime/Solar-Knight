@@ -3,60 +3,35 @@ use std::time::Duration;
 
 use crate::earth::Earth;
 use crate::core::{ Core, Team };
-use crate::gun::{ BulletSystem, TargetSystem };
+use crate::engine::Engine;
+use crate::gun::{ BulletSystem, TargetSystem, Gun };
 
 use std_ext::ExtractResultMut;
 use sys_api::basic_graphics_data::SpriteData;
 use sys_api::graphics_init::SpriteDataWriter;
 
 use glium::VertexBuffer;
+use tinyvec::ArrayVec;
 use cgmath::{ Matrix4, EuclideanSpace, InnerSpace, vec2, abs_diff_ne, abs_diff_eq };
 
 pub static mut FRICTION_KOEFF : f32 = 0.5f32;
 
-pub trait ShipLayout<S> : Copy + Any + 'static {
-    fn update(me : &mut Ship<Self>, dt : Duration);
-}
-
-pub unsafe trait SuperShipLayout : Sized + 'static {
-    fn upcast<T : ShipLayout<Self>>(x : T) -> Self;
-}
-
-const PADDING_SIZE : usize = 0;
-
-#[repr(C)]
-pub struct Ship<S : 'static> {
-    type_id : TypeId,
-    pub render : fn(&Ship<S>, &mut SpriteDataWriter),
-    update : fn(&mut Ship<S>, Duration),
+#[derive(Clone, Copy)]
+pub struct Ship {
+    pub render : fn(&Self, &mut SpriteDataWriter),
     pub think : fn(
-        me : &mut Ship<S>,
-        others : &ExtractResultMut<Ship<S>>,
+        me : &mut Self,
+        others : &ExtractResultMut<Self>,
         bullet_system : &mut BulletSystem,
         earth : &Earth,
         dt : Duration
     ),
     pub core : Core,
-    _pad : [u8; PADDING_SIZE],
-    pub layout : S,
+    pub engines : ArrayVec<[Engine; 5]>,
+    pub guns : ArrayVec<[Gun; 5]>,
 }
 
-impl<S : 'static> Ship<S> {
-    fn validate(&self) {
-        let offset_layout = 
-            ((&self.layout as *const S) as usize) - 
-            ((self as *const Ship<S>) as usize)
-        ;
-        let offset_pad = 
-            ((&self._pad as *const [u8; PADDING_SIZE]) as usize) - 
-            ((self as *const Ship<S>) as usize)
-        ;
-
-        //dbg!(offset_layout); dbg!(offset_pad);
-
-        assert_eq!(offset_layout - offset_pad, PADDING_SIZE, "Bad `PADDING_SIZE` value. (left - actual offset. right - guessed offset)");
-    }
-
+impl Ship {
     #[inline]
     pub fn model_mat(&self, size : (f32, f32)) -> Matrix4<f32> {
         let direction = self.core.direction();
@@ -70,76 +45,37 @@ impl<S : 'static> Ship<S> {
         ) * 
         Matrix4::from_nonuniform_scale(size.0, size.1, 1.0f32)
     }
-}
-
-impl<S : SuperShipLayout + 'static> Ship<S> {
         
-    pub fn new<T : ShipLayout<S>>(
-        layout : T, core : Core, 
+    pub fn new(
+        core : Core, 
         think : fn(
-            me : &mut Ship<T>,
-            others : &ExtractResultMut<Ship<S>>,
+            me : &mut Self,
+            others : &ExtractResultMut<Self>,
             bullet_system : &mut BulletSystem,
             earth : &Earth,
             dt : Duration
         ),
-        render : fn(&Ship<T>, &mut SpriteDataWriter),
-    ) -> Ship<S> {
-        use std::mem;
-
-        let cell =
-            unsafe {
-                Ship { 
-                    type_id : TypeId::of::<T>(),
-                    render : mem::transmute(render as *const ()),
-                    update : mem::transmute(<T as ShipLayout<S>>::update as *const ()),
-                    think : mem::transmute(think as *const ()),
-                    core,
-                    _pad : [0; PADDING_SIZE],
-                    layout : <S as SuperShipLayout>::upcast::<T>(layout),
-                }
-            }
-        ;
-        #[cfg(debug_assertions)] {
-            cell.validate();
-            let downed = cell.downcast::<T>().expect("Failed to downcast data to T which was an upcasted T");
-            downed.validate();
+        render : fn(&Self, &mut SpriteDataWriter),
+        engines : ArrayVec<[Engine; 5]>,
+        guns : ArrayVec<[Gun; 5]>,
+    ) -> Self {
+        Ship { 
+            render,
+            think,
+            core,
+            engines,
+            guns,
         }
-        cell
-    }
-
-    pub fn is<T : ShipLayout<S>>(&self) -> bool {
-        self.type_id == TypeId::of::<T>()
-    }
-
-    pub fn downcast<T : ShipLayout<S>>(&self) -> Option<&Ship<T>> {
-        use std::mem;
-
-        if self.is::<T>() {
-            Some(
-                unsafe { mem::transmute(self) }
-            )
-        } else { None }
-    }
-    
-    pub fn downcast_mut<T : ShipLayout<S>>(&mut self) -> Option<&mut Ship<T>> {
-        use std::mem;
-
-        if self.is::<T>() {
-            Some(
-                unsafe { mem::transmute(self) }
-            )
-        } else { None }
     }
 }
 
-pub struct Battlefield<S : SuperShipLayout + 'static> {
+pub struct Battlefield {
     pub earth : Earth,
-    mem : Vec<Ship<S>>,
+    mem : Vec<Ship>,
 }
 
-impl<S : SuperShipLayout + 'static> Battlefield<S> {
-    pub fn new() -> Battlefield<S> {
+impl Battlefield {
+    pub fn new() -> Battlefield {
         Battlefield {
             mem : Vec::new(),
             earth : Earth::new(),
@@ -157,12 +93,15 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
         .for_each(
             |c| {
                 c.core.force = vec2(0.0f32, 0.0f32);
-                (c.update)(c, dt);
-                //dbg!(c.core.velocity.magnitude()); 
+
+                let (core, engines, guns) = (&mut c.core, &mut c.engines, &mut c.guns);
+                engines.iter_mut().for_each(|x| x.update(core, dt));
+                guns.iter_mut().for_each(|x| x.update(core, dt));
+
                 if 
                     abs_diff_ne!(c.core.velocity.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) 
                 {
-                    c.core.force += friction_koeff * (-c.core.velocity).normalize();
+                    c.core.force -= 0.24f32 * c.core.velocity.magnitude() * c.core.velocity;
                 }
                 c.core.velocity += (dt.as_secs_f32() / c.core.mass) * c.core.force;
                 c.core.pos += dt.as_secs_f32() * c.core.velocity;
@@ -184,7 +123,7 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
         }
     }
     
-    pub fn spawn(&mut self, ship : Ship<S>) {
+    pub fn spawn(&mut self, ship : Ship) {
         self.mem.push(ship);
     }
             
@@ -206,32 +145,16 @@ impl<S : SuperShipLayout + 'static> Battlefield<S> {
     }
 
     #[inline]
-    pub fn get(&self, id : usize) -> Option<&Ship<S>> { self.mem.get(id) }
+    pub fn get(&self, id : usize) -> Option<&Ship> { self.mem.get(id) }
     
     #[inline]
-    pub fn get_mut(&mut self, id : usize) -> Option<&mut Ship<S>> { self.mem.get_mut(id) }
-    
-    #[inline]
-    pub fn get_downcasted<T : ShipLayout<S>>(&self, id : usize) -> Option<&Ship<T>> { 
-        self.mem
-        .as_slice()
-        .get(id) 
-        .and_then(|x| x.downcast::<T>())
-    }
-    
-    #[inline]
-    pub fn get_mut_downcasted<T : ShipLayout<S>>(&mut self, id : usize) -> Option<&mut Ship<T>> { 
-        self.mem
-        .as_mut_slice()
-        .get_mut(id) 
-        .and_then(|x| x.downcast_mut::<T>())
-    }
+    pub fn get_mut(&mut self, id : usize) -> Option<&mut Ship> { self.mem.get_mut(id) }
 }
         
 use std::slice::IterMut;
 use std::iter::Map;
-impl<'a, S : 'static + SuperShipLayout> TargetSystem<'a> for Battlefield<S> {
-    type Iter = Map<IterMut<'a, Ship<S>>, fn(&mut Ship<S>) -> &mut Core>;
+impl<'a> TargetSystem<'a> for Battlefield {
+    type Iter = Map<IterMut<'a, Ship>, fn(&mut Ship) -> &mut Core>;
 
     fn entity_iterator(&'a mut self) -> Self::Iter {
         self.mem.iter_mut().map(|x| &mut x.core)

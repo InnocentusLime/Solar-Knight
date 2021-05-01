@@ -27,6 +27,10 @@ pub static BLUR_FRAGMENT_SHADER : &'static str = include_str!("shaders/blur_shad
 
 pub static INSTANCED_SPRITE_VERTEX_SHADER : &'static str = include_str!("shaders/instanced_sprite_vertex_shader.glsl");
 
+pub static SOLID_VERTEX_SHADER : &'static str = include_str!("shaders/solid_vertex_shader.glsl");
+
+pub static SOLID_FRAGMENT_SHADER : &'static str = include_str!("shaders/solid_fragment_shader.glsl");
+
 include!(concat!(env!("OUT_DIR"), "/missing_tex.rs"));
 
 #[derive(Clone, Copy, Debug)]

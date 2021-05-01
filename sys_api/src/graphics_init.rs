@@ -24,6 +24,7 @@ pub const SCREEN_WIDTH : f32 = ASPECT_RATIO * SCALING;
 pub const SCREEN_RIGHT : f32 = SCREEN_WIDTH;
 pub const SCREEN_LEFT : f32 = -SCREEN_RIGHT;
 
+pub const SPRITE_DEBUG_LIMIT : usize = 10;
 pub const ENEMY_BULLET_LIMIT : usize = 10_000;
 pub const ENEMY_LIMIT : usize = 1000;
 pub const PLAYER_BULLET_LIMIT : usize = ENEMY_BULLET_LIMIT;
@@ -66,9 +67,11 @@ pub struct GraphicsContext {
     pub quad_vertex_buffer : VertexBuffer<GlVertex>,
     pub sprite_shader : Program,
     pub blur_shader : Program,
+    pub solid_shader : Program,
     pub instanced_sprite_shader : Program,
     pub bullet_buffer : VertexBuffer<SpriteData>, 
-    pub enemy_buffer : VertexBuffer<SpriteData>, 
+    pub enemy_buffer : VertexBuffer<SpriteData>,
+    pub sprite_debug_buffer : VertexBuffer<SpriteData>,
 }
 
 impl GraphicsContext {
@@ -185,6 +188,17 @@ impl GraphicsContext {
                 instanced_shader_creation
             )
         ;
+        
+        let solid_shader = 
+            verbose_try!(
+                Program::from_source(
+                    &display, 
+                    SOLID_VERTEX_SHADER, SOLID_FRAGMENT_SHADER, 
+                    None
+                ), 
+                solid_shader_creation
+            )
+        ;
 
         let bullet_buffer =
             verbose_try!(
@@ -200,6 +214,13 @@ impl GraphicsContext {
             )
         ;
         
+        let sprite_debug_buffer =
+            verbose_try!(
+                VertexBuffer::dynamic(&display, &[ZEROED_SPRITE_DATA; SPRITE_DEBUG_LIMIT]),
+                sprite_debug_buffer
+            )
+        ;
+        
         Ok(
             (
                 GraphicsContext {
@@ -210,8 +231,10 @@ impl GraphicsContext {
                     sprite_shader,
                     blur_shader,
                     instanced_sprite_shader,
+                    solid_shader,
                     bullet_buffer,
                     enemy_buffer,
+                    sprite_debug_buffer,
                 },
                 event_loop,
                 RenderTargets {

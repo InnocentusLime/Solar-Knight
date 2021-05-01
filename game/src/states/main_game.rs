@@ -2,14 +2,14 @@ use std::time::Duration;
 
 use cgmath::abs_diff_ne;
 use cgmath::{ EuclideanSpace, InnerSpace, One, Point2, vec2, point2 };
-use glium::glutin;
+use glium::{ glutin, Frame };
 use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
 use glutin::event::{ MouseButton };
 
 use ship_parts::constants::VECTOR_NORMALIZATION_RANGE;
-use ship_parts::{ BulletSystem, Team, PlayerShip, Battlefield };
-use super::{ GameState, TransitionRequest, main_menu };
+use ship_parts::{ BulletSystem, Team, Battlefield };
+use super::{ GameState, TransitionRequest, main_menu, main_game_debug_mode };
 use std_ext::*;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
@@ -55,15 +55,15 @@ fn load_environment_params() -> (f32, f32) {
 }
 
 pub struct StateData {
-    player_ship_texture : Texture2d,
-    sun_texture : Texture2d,
-    earth_texture : Texture2d,
-    basic_enemy_ship_texture : Texture2d,
-    background_texture : Texture2d,
-    player_bullet_texture : Texture2d,
+    pub player_ship_texture : Texture2d,
+    pub sun_texture : Texture2d,
+    pub earth_texture : Texture2d,
+    pub basic_enemy_ship_texture : Texture2d,
+    pub background_texture : Texture2d,
+    pub player_bullet_texture : Texture2d,
     //player_dash_trace_texture : Texture2d,
 
-    battlefield : Battlefield,
+    pub battlefield : Battlefield,
 
     timer : Duration,
     pointer_target : PointerTarget,
@@ -82,13 +82,10 @@ impl StateData {
 
         let mut battlefield = Battlefield::new();
 
-        battlefield.spawn(ship_parts::player_ship(Team::Earth, point2(0.0f32, 0.0f32), vec2(0.0f32, 1.0f32)));
+        battlefield.spawn(ship_parts::player_ship());
                 
         let mut me =
             StateData {
-                //hive : Hive::new(),
-                //player : Player::new(),
-
                 player_ship_texture,
                 sun_texture,
                 background_texture,
@@ -112,14 +109,16 @@ impl StateData {
 
         let (friction, player_mass) = load_environment_params();
 
+        /*
         unsafe { FRICTION_KOEFF = friction; }
         match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
             Some(player) => player.core.mass = player_mass,
             _ => (),
         }
+        */
     }
 
-    pub fn process_event(&mut self, _ctx : &mut GraphicsContext, _input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> { 
+    pub fn process_event(&mut self, _ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> { 
         use glutin::event;
 
         match event {
@@ -134,15 +133,16 @@ impl StateData {
                 ),
                 ..
             } => {
-                match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
+                match self.battlefield.get_mut(0) {
                     Some(player) if player.core.is_alive() => {
                         match virtual_keycode {
                             Some(event::VirtualKeyCode::U) => self.load_params(),
-                            Some(event::VirtualKeyCode::W) => player.increase_speed(),
-                            Some(event::VirtualKeyCode::S) => player.decrease_speed(),
                             Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
                             Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
                             Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
+                            Some(event::VirtualKeyCode::D) if input_tracker.is_key_down(event::VirtualKeyCode::LControl) => 
+                                return Some(Box::new(main_game_debug_mode::StateData::init))
+                            ,
                             _ => (),
                         }
                     },
@@ -180,17 +180,25 @@ impl StateData {
             self.timer = self.timer.my_saturating_sub(dt);
         }
 
-        match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
+        match self.battlefield.get_mut(0) {
             Some(player) if player.core.is_alive() => {
-                //dbg!(player.core.velocity);
                 let mouse_pos = input_tracker.mouse_position();
                 if abs_diff_ne!(mouse_pos.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
                     player.core.set_direction(mouse_pos.normalize());
                 }
         
                 if input_tracker.is_mouse_button_down(MouseButton::Left) {
-                    player.layout.gun.shoot(&player.core)
-                    .map_or((), |x| self.bullet_sys.spawn(x));
+                    // Closures still haven't got smarter :(
+                    // Keep track of https://github.com/rust-lang/rfcs/issues/1215
+                    let bullet_sys = &mut self.bullet_sys;
+                    player.guns[0].shoot(&player.core)
+                    .map_or((), |x| bullet_sys.spawn(x));
+                }
+
+                if input_tracker.is_mouse_button_down(MouseButton::Right) {
+                    player.engines[0].increase_speed()
+                } else {
+                    player.engines[0].decrease_speed()
                 }
             },
             _ => (),
@@ -200,7 +208,7 @@ impl StateData {
         self.bullet_sys.update(&mut self.battlefield, dt);
         self.battlefield.think(&mut self.bullet_sys, dt);
        
-        if let Some(player) = self.battlefield.get_downcasted::<PlayerShip>(0) {
+        if let Some(player) = self.battlefield.get(0) {
             ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);
         } else { panic!("No player!!"); }
          
@@ -217,48 +225,43 @@ impl StateData {
         None
     }
 
-    pub fn render(&self, ctx : &mut GraphicsContext, _targets : &mut RenderTargets, _input_tracker : &InputTracker) {
+    pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, _targets : &mut RenderTargets, _input_tracker : &InputTracker) {
         use glium::Surface;
         use cgmath::Matrix4;
 
         use sys_api::graphics_utils::{ draw_sprite, draw_instanced_sprite };
 
-        let mut frame = ctx.display.draw();
-        frame.clear_color(0.0, 0.0, 0.0, 1.0);
-
         let vp = ctx.build_projection_view_matrix();
 
         // Drawing paralaxed background
-        //use sys_api::graphics_init::ASPECT_RATIO;
+        use sys_api::graphics_init::SCREEN_WIDTH;
         let cam = -ctx.camera.disp.truncate(); 
-        let picker = vec2((0.2f32 * cam.x) % 1.0f32, (0.2f32 * cam.y) % 1.0f32);
+        let picker = vec2((0.2f32 * cam.x / SCREEN_WIDTH) % 1.0f32, (0.2f32 * cam.y) % 1.0f32);
         draw_sprite(
-            ctx, &mut frame, 
+            ctx, frame, 
             Matrix4::one(),
-//            (picker.x / SCREEN_WIDTH, picker.y, 1.0f32, 1.0f32),
             (picker.x, picker.y, 1.0f32, 1.0f32),
             self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
             Some(ctx.viewport())
         );
-        let picker = vec2((0.05f32 * cam.x - 0.5f32) % 1.0f32, (0.05f32 * cam.y + 0.03f32) % 1.0f32);
+        let picker = vec2((0.05f32 * cam.x / SCREEN_WIDTH - 0.5f32) % 1.0f32, (0.05f32 * cam.y + 0.03f32) % 1.0f32);
         draw_sprite(
-            ctx, &mut frame, 
+            ctx, frame, 
             Matrix4::one(),
-//            (picker.x / SCREEN_WIDTH, picker.y, 1.0f32, 1.0f32),
             (picker.x, picker.y, 1.0f32, 1.0f32),
             self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
             Some(ctx.viewport())
         );
         // Planets 
         draw_sprite(
-            ctx, &mut frame, 
+            ctx, frame, 
             vp * self.battlefield.earth.model_mat(), 
             (0.0f32, 0.0f32, 1.0f32, 1.0f32),
             self.earth_texture.sampled(), 
             Some(ctx.viewport())
         );
         draw_sprite(
-            ctx, &mut frame, 
+            ctx, frame, 
             vp * Matrix4::from_nonuniform_scale(0.6f32, 0.6f32, 1.0f32), 
             (0.0f32, 0.0f32, 1.0f32, 1.0f32),
             self.sun_texture.sampled(), 
@@ -272,11 +275,11 @@ impl StateData {
         
         ctx.bullet_buffer.invalidate();
         self.bullet_sys.fill_buffer(&mut ctx.bullet_buffer);
-        draw_instanced_sprite(ctx, &mut frame, &ctx.bullet_buffer, vp, self.player_bullet_texture.sampled(), Some(ctx.viewport()));
+        draw_instanced_sprite(ctx, frame, &ctx.bullet_buffer, vp, self.player_bullet_texture.sampled(), Some(ctx.viewport()));
 
         ctx.enemy_buffer.invalidate();
         self.battlefield.fill_buffer(&mut ctx.enemy_buffer);
-        draw_instanced_sprite(ctx, &mut frame, &ctx.enemy_buffer, vp, self.player_ship_texture.sampled(), Some(ctx.viewport()));
+        draw_instanced_sprite(ctx, frame, &ctx.enemy_buffer, vp, self.player_ship_texture.sampled(), Some(ctx.viewport()));
 
         let pointer_target = 
             match self.pointer_target {
@@ -291,7 +294,7 @@ impl StateData {
             .and_then(
                 |x| 
                 self.battlefield
-                .get_downcasted::<PlayerShip>(0)
+                .get(0)
                 .and_then(|y| point_at(y.core.pos, x))
             )
         ;
@@ -300,7 +303,7 @@ impl StateData {
             Some(pointer) => {
                 let model_mat = ctx.proj_mat * Matrix4::from_translation(pointer.to_vec().extend(0.0f32)) * Matrix4::from_nonuniform_scale(0.1f32, 0.1f32, 1.0f32);
                 draw_sprite(
-                    ctx, &mut frame, 
+                    ctx, frame, 
                     model_mat, 
                     (0.0f32, 0.0f32, 1.0f32, 1.0f32),
                     self.basic_enemy_ship_texture.sampled(), 
@@ -309,8 +312,13 @@ impl StateData {
             },
             None => (),
         }
+    }
 
-        frame.finish().unwrap();
+    pub fn player_pos(&self) -> Point2<f32> {
+        match self.battlefield.get(0) {
+            Some(p) => p.core.pos,
+            None => point2(0.0f32, 0.0f32),
+        }
     }
 }
 

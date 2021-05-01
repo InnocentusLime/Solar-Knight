@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use glium::glutin;
+use glium::{ glutin, Frame };
 use glium::texture::texture2d::Texture2d;
 
 use super::{ GameState, TransitionRequest }; 
@@ -47,33 +47,27 @@ impl StateData {
         None
     }
 
-    pub fn render(&self, ctx : &mut GraphicsContext, _ : &mut RenderTargets, _input_tracker : &InputTracker) {
+    pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, _ : &mut RenderTargets, _input_tracker : &InputTracker) {
         use glium::Surface;
         use cgmath::{ One, Matrix4 };
 
         use sys_api::graphics_utils::draw_sprite;
-
-        let mut frame = ctx.display.draw();
-        frame.clear_color(1.0, 1.0, 1.0, 1.0);
-
         /* render code */
         let vp = ctx.proj_mat;
 
         draw_sprite(
-            ctx, &mut frame, 
+            ctx, frame, 
             Matrix4::one(), 
             (0.0f32, 0.0f32, 1.0f32, 1.0f32),
             self.background_texture.sampled(), 
             Some(ctx.viewport())
         );
         draw_sprite(
-            ctx, &mut frame, 
+            ctx, frame, 
             vp * Matrix4::from_nonuniform_scale(0.5f32, 0.5f32, 1.0f32), 
             (0.0f32, 0.0f32, 1.0f32, 1.0f32),
             self.play_button_texture.sampled(), 
             Some(ctx.viewport())
         );
-
-        frame.finish().unwrap(); 
     }
 }

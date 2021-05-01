@@ -1,5 +1,5 @@
 use cgmath::assert_abs_diff_eq;
-use cgmath::{ Point2, Vector2, Matrix3, EuclideanSpace, InnerSpace, vec2 };
+use cgmath::{ Point2, Vector2, Matrix3, EuclideanSpace, InnerSpace, vec2, point2 };
 
 //use collision::*;
 use crate::constants::VECTOR_NORMALIZATION_RANGE;
@@ -36,6 +36,7 @@ pub enum Team {
 /// be used to do some behaviour to emulate a death state for a boss.
 // TODO consider inlining `Core` into `Ship`
 // FIXME `mass`, `force`, `velocity` and `direction`, `pos` should be protected
+#[derive(Clone, Copy)]
 pub struct Core {
     hp : u64,
     model : CollisionModelIndex,
@@ -48,16 +49,14 @@ pub struct Core {
 }
 
 impl Core {
-    pub fn new(hp : u64, mass : f32, model : CollisionModelIndex, team : Team, pos : Point2<f32>, direction : Vector2<f32>) -> Self {
-        assert!((direction.magnitude() - 1.0f32).abs() < VECTOR_NORMALIZATION_RANGE);
-
+    pub const fn new(hp : u64, mass : f32, model : CollisionModelIndex, team : Team) -> Self {
         Core {
             hp,
             model,
             team,
-            pos,
+            pos : point2(0.0f32, 0.0f32),
             mass,
-            direction,
+            direction : vec2(0.0f32, 1.0f32),
             force : vec2(0.0f32, 0.0f32),
             velocity : vec2(0.0f32, 0.0f32),
         }

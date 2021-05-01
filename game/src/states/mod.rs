@@ -1,7 +1,7 @@
 use std::time::Duration;
 use std::error::Error as StdError;
 
-use glium::glutin;
+use glium::{ glutin, Surface };
 
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
@@ -113,6 +113,13 @@ pub enum GameState {
     MainMenu(main_menu::StateData),
     /// The main game
     MainGame(main_game::StateData),
+    /// The debug mode for main game.
+    /// It plugs right into the main game state allowing the on-fly
+    /// editing of the data.
+    MainGameDebugMode(main_game_debug_mode::StateData),
+    /// The state used purely for testing of different features like
+    /// gui or `sys_api`
+    Testing(testing::StateData),
 }
 
 impl GameState {
@@ -133,6 +140,7 @@ impl GameState {
             GameState::Booting(x) => x.process_event(ctx, input_tracker, event),
             GameState::MainMenu(x) => x.process_event(ctx, input_tracker, event),
             GameState::MainGame(x) => x.process_event(ctx, input_tracker, event),
+            GameState::MainGameDebugMode(x) => x.process_event(ctx, input_tracker, event),
             _ => None,
         }
     }
@@ -145,18 +153,23 @@ impl GameState {
             GameState::Booting(x) => x.update(ctx, input_tracker, dt),
             GameState::MainMenu(x) => x.update(ctx, input_tracker, dt),
             GameState::MainGame(x) => x.update(ctx, input_tracker, dt),
+            GameState::MainGameDebugMode(x) => x.update(ctx, input_tracker, dt),
             _ => None,
         }
     }
 
     #[inline]
-    pub fn render(&self, ctx : &mut GraphicsContext, targets : &mut RenderTargets, input_tracker : &InputTracker) {
+    pub fn render(&mut self, ctx : &mut GraphicsContext, targets : &mut RenderTargets, input_tracker : &InputTracker) {
+        let mut frame = ctx.display.draw();
+        frame.clear_color(0.0f32, 0.0f32, 0.0f32, 1.0f32);
         match self {
-            GameState::Booting(x) => x.render(ctx, targets, input_tracker),
-            GameState::MainMenu(x) => x.render(ctx, targets, input_tracker),
-            GameState::MainGame(x) => x.render(ctx, targets, input_tracker),
+            GameState::Booting(x) => x.render(&mut frame, ctx, targets, input_tracker),
+            GameState::MainMenu(x) => x.render(&mut frame, ctx, targets, input_tracker),
+            GameState::MainGame(x) => x.render(&mut frame, ctx, targets, input_tracker),
+            GameState::MainGameDebugMode(x) => x.render(&mut frame, ctx, targets, input_tracker),
             _ => (),
         }
+        frame.finish().unwrap();
     }
 }
 
@@ -172,3 +185,5 @@ pub const FRAMES_PER_SECOND : u32 = 60;
 pub mod booting;
 pub mod main_menu;
 pub mod main_game;
+pub mod main_game_debug_mode;
+pub mod testing;

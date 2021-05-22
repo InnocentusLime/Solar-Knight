@@ -10,8 +10,10 @@ description = "A modular crate for quick text drawing"
 [dependencies]
 # I have picked the `freetype-sys` crate, because 
 # it's used by `freetype`, whic is used by Servo
-freetype-sys = { path = "../freetype-sys/" }
-#freetype-sys = "0.14.0"
+freetype-sys = "0.15.0"
+glium = "0.29.0"
+
+sys_api = { path = "../sys_api" }
 
 # Dev-dependencies
 #image = "*"

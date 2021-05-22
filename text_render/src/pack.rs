@@ -15,7 +15,7 @@ pub struct GlyphData {
 }
 
 pub struct Atlas {
-    glyph_data : HashMap<char, GlyphData>,
+    pub glyph_data : HashMap<char, GlyphData>,
     pub luma : Vec<u8>,
     pub width : usize,
     pub height : usize,

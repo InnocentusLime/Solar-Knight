@@ -4,18 +4,16 @@ use std::error::Error as StdError;
 
 use super::{ TransitionRequest, GameState, main_game };
 
-use log::trace;
 use glium::{ Frame, Surface, glutin };
 use lazy_static::lazy_static;
-use glutin::event;
+use glutin::{ event, event_loop::ControlFlow };
 use cgmath::{ EuclideanSpace, Point2, point2, vec2 };
+use egui_glium::EguiGlium;
+use egui::{ epaint::ClippedShape, Widget, Sense, Id };
 
-//use rags::Context as RagsContext;
 use ship_parts::Ship;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
-
-//use crate::rags_impl::RagsBackend;
 
 #[derive(Debug)]
 pub struct DebugModeEntranceError;
@@ -37,34 +35,74 @@ lazy_static! {
     ;
 }
 
+#[derive(Clone)]
 enum DebugState {
     FreeCam,
     PlacingShip {
+        placing : bool,
         placed_ship_info : usize,
         current_ship : Ship,
     },
 }
 
+impl PartialEq for DebugState {
+    fn eq(&self, other : &Self) -> bool {
+        use std::mem;
+
+        mem::discriminant(self) == mem::discriminant(other)
+    }
+}
+
+impl DebugState {
+    fn free_cam_display_str() -> &'static str { "Free camera" }
+
+    fn free_cam() -> Self { Self::FreeCam }
+    
+    fn placing_ship_display_str() -> &'static str { "Placing ship" }
+
+    fn placing_ship() -> Self {
+        Self::PlacingShip {
+            placing : false,
+            placed_ship_info : 0,
+            current_ship : (TEMPLATE_TABLE[0])(),
+        }
+    }
+}
+
+impl fmt::Display for DebugState {
+    fn fmt(&self, f : &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DebugState::FreeCam => write!(f, "{}", Self::free_cam_display_str()),
+            DebugState::PlacingShip { .. } => write!(f, "{}", Self::placing_ship_display_str()),
+        }
+    }
+}
+
 pub struct StateData {
-//    rctx : RagsContext,
     look : Point2<f32>,
     captured_state : main_game::StateData,
     // editor state
     state : DebugState,
+    // ui backend
+    pointer_inside_panel : bool,
+    eg : EguiGlium,
+    draw_req : Option<Vec<ClippedShape>>,
 }
 
 impl StateData {
     pub fn init(ctx : &mut GraphicsContext, old : GameState) -> GameState {
-        trace!("Debug mode entered");
-
         match old {
             GameState::MainGame(captured_state) => { 
                 GameState::MainGameDebugMode(
                     StateData {
-//                        rctx : RagsContext::new(ctx.display.get_framebuffer_dimensions()),
+                        // Basic init
                         look : captured_state.player_pos(),
                         captured_state,
                         state : DebugState::FreeCam,
+                        // ui backend init
+                        pointer_inside_panel : true,
+                        eg : EguiGlium::new(&ctx.display),
+                        draw_req : None,
                     }
                 )
             },
@@ -74,31 +112,34 @@ impl StateData {
 
     /// The event processing procedure of the state.
     #[inline]
-    pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> {
+    pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<'static, ()>) -> Option<TransitionRequest> {
         use glutin::event;
         
         match event {
-            event::Event::WindowEvent { event, window_id } => match event {
-                event::WindowEvent::MouseInput {
-                    state,
-                    button,
-                    ..
-                } => {
-                    if *button == event::MouseButton::Left {
-                        /*
-                        if *state == event::ElementState::Pressed { self.rctx.input.press_mouse(); }
-                        else { self.rctx.input.release_mouse(); }
-                        */
-                        match &self.state {
-                            DebugState::PlacingShip { current_ship, .. } => {
-                                trace!("Ship spawned");
-                                self.captured_state.battlefield.spawn(current_ship.clone());
-                            },
-                            _ => (),
+            event::Event::WindowEvent { event, window_id } => {
+                // Avoid handing the real control flow to `egui` for now.
+                // Waiting for the reply:
+                // https://github.com/emilk/egui/issues/434
+                let mut dummy = ControlFlow::Exit;
+                self.eg.on_event(event.clone(), &mut dummy);
+                
+                match event {
+                    event::WindowEvent::MouseInput {
+                        state,
+                        button,
+                        ..
+                    } => {
+                        if *button == event::MouseButton::Left && *state == event::ElementState::Pressed {
+                            match &self.state {
+                                DebugState::PlacingShip { current_ship, placing, .. } if !self.pointer_inside_panel && *placing => {
+                                    self.captured_state.battlefield.spawn(current_ship.clone());
+                                },
+                                _ => (),
+                            }
                         }
-                    }
-                },
-                _ => (),
+                    },
+                    _ => (),
+                }
             },
             event::Event::DeviceEvent {
                 event : event::DeviceEvent::Key (
@@ -111,31 +152,7 @@ impl StateData {
                 ),
                 ..
             } => match virtual_keycode {
-                Some(event::VirtualKeyCode::Escape) => {
-                    trace!("Debug mode terminated");
-                    return Some(Box::new(Self::unwrap))
-                },
-                // Key for entering ship placement
-                Some(event::VirtualKeyCode::P) => {
-                    trace!("Entered ship placement");
-                    self.state = DebugState::PlacingShip { placed_ship_info : 0, current_ship : (TEMPLATE_TABLE[0])() };
-                },
-                // Key for scrolling through ships
-                Some(event::VirtualKeyCode::N) => {
-                    match &mut self.state {
-                        DebugState::PlacingShip { placed_ship_info, current_ship } => {
-                            *placed_ship_info = (*placed_ship_info + 1) % TEMPLATE_TABLE.len();
-                            *current_ship = (TEMPLATE_TABLE[*placed_ship_info])();
-                            trace!("Selected ship ID {}", placed_ship_info);
-                        }
-                        _ => (),
-                    }
-                },
-                // Key for entering free-cam
-                Some(event::VirtualKeyCode::C) => {
-                    trace!("Entered free cam");
-                    self.state = DebugState::FreeCam;
-                },
+                Some(event::VirtualKeyCode::Escape) => return Some(Box::new(Self::unwrap)),
                 _ => (),
             },
             _ => (),
@@ -153,25 +170,74 @@ impl StateData {
         use sys_api::graphics_init::SCREEN_WIDTH;
 
         let mv = input_tracker.mouse_position();
+        // place the ship according to mouse pos and camera pos
         
+        let egui = &mut self.eg;
+        let state = &mut self.state;
+        egui.begin_frame(&ctx.display);
+
+        let mut quit = false;
+        self.pointer_inside_panel =     
+        {
+            let rect =
+                egui::SidePanel::left("debug_menu", 350.0)
+                .show(egui.ctx(), |ui| {
+                    ui.heading("Debug menu");
+                    if ui.button("Quit").clicked() { quit = true; }
+
+                    egui::ComboBox::from_label("Mode")
+                    .width(150.0)
+                    .selected_text(format!("{}", state))
+                    .show_ui(
+                        ui,
+                        |ui| {
+                            ui.selectable_value(state, DebugState::free_cam(), DebugState::free_cam_display_str());
+                            ui.selectable_value(state, DebugState::placing_ship(), DebugState::placing_ship_display_str());
+                        }
+                    );
+
+                    egui::Separator::default()
+                    .horizontal()
+                    .ui(ui);
+
+                    match state {
+                        DebugState::PlacingShip { current_ship, placed_ship_info, placing } => {
+                            egui::ComboBox::from_label("Ship")
+                            .width(150.0)
+                            .show_index(
+                                ui, 
+                                placed_ship_info,
+                                TEMPLATE_TABLE.len(),
+                                |u| u.to_string()
+                            );
+    
+                            if !*placing {
+                                if egui::Button::new("place").ui(ui).clicked() { *placing = true; }
+                            } else {
+                                if egui::Button::new("stop placing").ui(ui).clicked() { *placing = false; }
+                            }
+                        },
+                        _ => (),
+                    }
+                }).response.rect
+            ;
+            egui.ctx().input().pointer
+            .hover_pos()
+            .map(|x| rect.contains(x))
+            .unwrap_or(false)
+        };
+
+        let (_, shapes) = egui.end_frame(&ctx.display);
+
+        self.draw_req = Some(shapes);
+       
         match &mut self.state {
-            DebugState::PlacingShip { current_ship, .. } => {
+            DebugState::PlacingShip { current_ship, placed_ship_info, .. } if !self.pointer_inside_panel => {
+                *current_ship = (TEMPLATE_TABLE[*placed_ship_info])();
                 current_ship.core.pos = self.look + mv;
             },
             _ => (),
         }
-        /*
-        let (width, height) = self.rctx.dimensions();
-        self.rctx.input.place_mouse(
-            (
-                ((mv.x / (2.0f32 * SCREEN_WIDTH) + 0.5f32) * (width as f32)) as u32, 
-                (-(mv.y / 2.0f32 - 0.5f32) * (height as f32)) as u32
-            )
-        );
-        self.rctx.update();
-        self.rctx.clear_commands();
-        self.rctx.draw_box((0, 0), (100, 100), (0, 0, 120, 100));
-        */
 
         if input_tracker.is_key_down(Key::W) { self.look += dt.as_secs_f32() * vec2(0.0f32, 1.0f32); }
         if input_tracker.is_key_down(Key::A) { self.look += dt.as_secs_f32() * vec2(-1.0f32, 0.0f32); }
@@ -180,9 +246,8 @@ impl StateData {
 
         ctx.camera.disp = (-self.look.to_vec()).extend(0.0f32);
 
-        // place the ship according to mouse pos and camera pos
-
-        None
+        if quit { Some(Box::new(Self::unwrap)) }
+        else { None }
     }
 
     #[inline]
@@ -191,7 +256,7 @@ impl StateData {
         
         let vp = ctx.build_projection_view_matrix();
         match &self.state {
-            DebugState::PlacingShip { current_ship, .. } => {
+            DebugState::PlacingShip { current_ship, placing, .. } => {
                 use sys_api::graphics_init::SpriteDataWriter;
                 use sys_api::graphics_utils::draw_instanced_sprite;
 
@@ -210,16 +275,16 @@ impl StateData {
                     (current_ship.render)(current_ship, &mut writer);
                 };
 
-                draw_instanced_sprite(ctx, frame, &ctx.sprite_debug_buffer, vp, self.captured_state.player_ship_texture.sampled(), Some(ctx.viewport()));
+                if *placing && !self.pointer_inside_panel {
+                    // render the to-place ship
+                    draw_instanced_sprite(ctx, frame, &ctx.sprite_debug_buffer, vp, self.captured_state.player_ship_texture.sampled(), Some(ctx.viewport()));
+                }
             }
             _ => (),
         }
-
-        // render the to-place ship
-
-        /*
-        self.rctx.done(&mut RagsBackend::new(&mut frame, ctx));
-        */
+        
+        self.draw_req.take()
+        .map(|x| self.eg.paint(&ctx.display, frame, x));
     }
 
     pub fn unwrap(_ : &mut GraphicsContext, g : GameState) -> GameState {

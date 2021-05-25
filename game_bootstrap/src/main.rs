@@ -118,8 +118,11 @@ fn main() -> Result<(), Box<dyn StdError>> {
         // Forward the event to the state
         // Event processing is ignored if a state change was requested
         if transition_request.is_none() {
-            input_tracker.process_event(&event);
-            transition_request = state.process_event(&mut ctx, &input_tracker, &event)
+            // Hm... I am not sure if I am liking that!
+            if let Some(event) = event.to_static() {
+                input_tracker.process_event(&event);
+                transition_request = state.process_event(&mut ctx, &input_tracker, &event)
+            }
         }
     });
 }

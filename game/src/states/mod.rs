@@ -135,12 +135,13 @@ impl GameState {
 
     /// The event processing procedure of the state.
     #[inline]
-    pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> {
+    pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<'static, ()>) -> Option<TransitionRequest> {
         match self {
             GameState::Booting(x) => x.process_event(ctx, input_tracker, event),
             GameState::MainMenu(x) => x.process_event(ctx, input_tracker, event),
             GameState::MainGame(x) => x.process_event(ctx, input_tracker, event),
             GameState::MainGameDebugMode(x) => x.process_event(ctx, input_tracker, event),
+            GameState::Testing(x) => x.process_event(ctx, input_tracker, event),
             _ => None,
         }
     }
@@ -154,6 +155,7 @@ impl GameState {
             GameState::MainMenu(x) => x.update(ctx, input_tracker, dt),
             GameState::MainGame(x) => x.update(ctx, input_tracker, dt),
             GameState::MainGameDebugMode(x) => x.update(ctx, input_tracker, dt),
+            GameState::Testing(x) => x.update(ctx, input_tracker, dt),
             _ => None,
         }
     }
@@ -167,6 +169,7 @@ impl GameState {
             GameState::MainMenu(x) => x.render(&mut frame, ctx, targets, input_tracker),
             GameState::MainGame(x) => x.render(&mut frame, ctx, targets, input_tracker),
             GameState::MainGameDebugMode(x) => x.render(&mut frame, ctx, targets, input_tracker),
+            GameState::Testing(x) => x.render(&mut frame, ctx, targets, input_tracker),
             _ => (),
         }
         frame.finish().unwrap();

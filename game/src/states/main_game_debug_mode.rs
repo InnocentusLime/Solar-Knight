@@ -43,6 +43,10 @@ enum DebugState {
         placed_ship_info : usize,
         current_ship : Ship,
     },
+    InspectingShip {
+        id : usize,
+        input : String,
+    },
 }
 
 impl PartialEq for DebugState {
@@ -67,6 +71,15 @@ impl DebugState {
             current_ship : (TEMPLATE_TABLE[0])(),
         }
     }
+
+    fn inspecting_ship() -> Self {
+        Self::InspectingShip {
+            id : 0,
+            input : 0.to_string(),
+        }
+    }
+
+    fn inspecting_ship_display_str() -> &'static str { "Inspecting ship" }
 }
 
 impl fmt::Display for DebugState {
@@ -74,6 +87,7 @@ impl fmt::Display for DebugState {
         match self {
             DebugState::FreeCam => write!(f, "{}", Self::free_cam_display_str()),
             DebugState::PlacingShip { .. } => write!(f, "{}", Self::placing_ship_display_str()),
+            DebugState::InspectingShip { .. } => write!(f, "{}", Self::inspecting_ship_display_str()),
         }
     }
 }
@@ -172,8 +186,10 @@ impl StateData {
         let mv = input_tracker.mouse_position();
         // place the ship according to mouse pos and camera pos
         
+        let look = &mut self.look;
         let egui = &mut self.eg;
         let state = &mut self.state;
+        let captured_state = &mut self.captured_state;
         egui.begin_frame(&ctx.display);
 
         let mut quit = false;
@@ -193,6 +209,7 @@ impl StateData {
                         |ui| {
                             ui.selectable_value(state, DebugState::free_cam(), DebugState::free_cam_display_str());
                             ui.selectable_value(state, DebugState::placing_ship(), DebugState::placing_ship_display_str());
+                            ui.selectable_value(state, DebugState::inspecting_ship(), DebugState::inspecting_ship_display_str());
                         }
                     );
 
@@ -201,6 +218,7 @@ impl StateData {
                     .ui(ui);
 
                     match state {
+                        DebugState::FreeCam => (),
                         DebugState::PlacingShip { current_ship, placed_ship_info, placing } => {
                             egui::ComboBox::from_label("Ship")
                             .width(150.0)
@@ -217,7 +235,55 @@ impl StateData {
                                 if egui::Button::new("stop placing").ui(ui).clicked() { *placing = false; }
                             }
                         },
-                        _ => (),
+                        DebugState::InspectingShip { id, input } => {
+
+                            ui.horizontal(
+                            |ui| {
+                                // Text box for choosing the ship
+                                if 
+                                    egui::TextEdit::singleline(input)
+                                    .hint_text("ship id")
+                                    .desired_width(50.0f32)
+                                    .ui(ui)
+                                    .lost_focus() 
+                                {
+                                    if let Ok(new_id) = input.trim().parse() { *id = new_id; }
+                                    else { *input = id.to_string() }
+                                }
+
+                                if egui::Button::new("Jump").ui(ui).clicked() {
+                                    if let Some(ship) = captured_state.battlefield.get(*id) {
+                                        *look = ship.core.pos;
+                                    }
+                                }
+                            });
+
+                            // Printing data about the ship
+                            match captured_state.battlefield.get(*id) {
+                                None => { 
+                                    ui.heading("No ship at this cell");
+                                }
+                                Some(ship) => {
+                                    ui.heading(format!("pos : {}, {}", ship.core.pos.x, ship.core.pos.y));
+                                    ui.heading(format!("hp : {}", ship.core.hp()));
+                                    ui.heading(format!("team : {:?}", ship.core.team()));
+                                    ship.engines.iter()
+                                    .enumerate()
+                                    .for_each(
+                                        |(id, engine)| {
+                                            ui.heading(format!("engine{} : {:?}", id, engine));
+                                        }
+                                    );
+                                    ship.guns.iter()
+                                    .enumerate()
+                                    .for_each(
+                                        |(id, gun)| {
+                                            ui.heading(format!("gun{} : {:?}", id, gun));
+                                        }
+                                    );
+                                },
+                            }
+                        },
                     }
                 }).response.rect
             ;

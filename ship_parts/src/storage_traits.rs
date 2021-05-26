@@ -103,8 +103,9 @@ impl Battlefield {
                 {
                     c.core.force -= 0.24f32 * c.core.velocity.magnitude() * c.core.velocity;
                 }
-                c.core.velocity += (dt.as_secs_f32() / c.core.mass) * c.core.force;
-                c.core.pos += dt.as_secs_f32() * c.core.velocity;
+                let acceleration = c.core.force / c.core.mass;
+                c.core.pos += dt.as_secs_f32() * c.core.velocity + dt.as_secs_f32().powi(2) * acceleration / 2.0f32;
+                c.core.velocity += dt.as_secs_f32() * acceleration;
             }
         );
 

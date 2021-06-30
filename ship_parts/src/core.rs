@@ -73,6 +73,15 @@ impl Core {
         self.hp
     }
 
+    /// Call only when absolutely needed.
+    ///
+    /// Unsafety
+    /// Allows you to set HP avoiding any damage triggers
+    #[inline]
+    pub unsafe fn hp_mut(&mut self) -> &mut u64 {
+        &mut self.hp
+    }
+
     #[inline]
     pub fn is_alive(&self) -> bool {
         self.hp > 0

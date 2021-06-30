@@ -15,7 +15,7 @@ pub mod part_trait;
 pub use crate::core::Team;
 pub use crate::earth::Earth;
 pub use crate::gun::BulletSystem;
-pub use crate::storage_traits::{ Ship, Battlefield };       
+pub use crate::storage_traits::{ Ship, Battlefield, RoutineId };       
 
 use std::time::Duration;
 
@@ -30,6 +30,64 @@ use crate::collision_models::model_indices::*;
 use crate::constants::VECTOR_NORMALIZATION_RANGE;
 
 use cgmath_ext::rotate_vector_ox;
+
+mod ai {
+    use super::*;
+
+    pub fn shoot(
+        me : &mut Ship,
+        bullet_system : &mut crate::gun::BulletSystem,
+        gun : usize,
+    ) {
+        me.guns[0].shoot(&me.core) 
+        .map_or(
+            (),
+            |x| bullet_system.spawn(x)
+        )
+    }
+
+    pub fn can_see(
+        me : &Ship,
+        target : Point2<f32>,
+        view_angle : f32,
+    ) -> bool {
+        let dir_vec = target - me.core.pos;
+        let ang = me.core.direction().angle(dir_vec);
+        ang.0.abs() <= view_angle / 2.0f32
+    }
+
+    pub fn target_near(
+        me : &Ship,
+        target : Point2<f32>,
+        coverage_radius : f32,
+    ) -> bool {
+        let dir_vec = (target - me.core.pos).normalize();
+        dir_vec.magnitude() <= coverage_radius
+    }
+
+    pub fn rotate_towards(
+        me : &mut Ship,
+        target : Point2<f32>,
+        angular_speed : f32,
+        dt : Duration,
+    ) -> bool {
+        let dir_vec = (target - me.core.pos).normalize();
+        let dir_vec = dir_vec.normalize();
+        let ang = me.core.direction().angle(dir_vec);
+
+        if abs_diff_ne!(ang.0, 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
+            let (c, s) =
+                if ang.0 > 0.0f32 {
+                    ((angular_speed * dt.as_secs_f32()).cos(), (angular_speed * dt.as_secs_f32()).sin())
+                } else {
+                    ((angular_speed * dt.as_secs_f32()).cos(), -(angular_speed * dt.as_secs_f32()).sin())
+                }
+            ;
+            me.core.set_direction(rotate_vector_ox(me.core.direction(), vec2(c, s)));
+            false
+        } else { true }
+    }
+}
 
 fn no_ai(
     _me : &mut Ship,
@@ -47,32 +105,13 @@ fn turret_ai(
     dt : Duration,
 ) {
     const TURRET_ROTATION_SPEED : f32 = std::f32::consts::TAU / 4.0f32;
+    let target = others[0].core.pos;
 
-    let player = &others[0];
-
-    let dir_vec = player.core.pos - me.core.pos;
-    if dir_vec.magnitude() > 1.5f32 { return }
-
-    let dir_vec = dir_vec.normalize();
-    let ang = me.core.direction().angle(dir_vec);
-
-    if abs_diff_ne!(ang.0, 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
-        let (c, s) =
-            if ang.0 > 0.0f32 {
-                ((TURRET_ROTATION_SPEED * dt.as_secs_f32()).cos(), (TURRET_ROTATION_SPEED * dt.as_secs_f32()).sin())
-            } else {
-                ((TURRET_ROTATION_SPEED * dt.as_secs_f32()).cos(), -(TURRET_ROTATION_SPEED * dt.as_secs_f32()).sin())
-            }
-        ;
-        me.core.set_direction(rotate_vector_ox(me.core.direction(), vec2(c, s)));
-    } 
-
-    if abs_diff_eq!(ang.0, 0.0f32, epsilon = std::f32::consts::PI / 8.0f32) { 
-        me.guns[0].shoot(&me.core) 
-        .map_or(
-            (),
-            |x| bullet_system.spawn(x)
-        )
+    if ai::target_near(me, target, 1.5f32) {
+        ai::rotate_towards(me, target, TURRET_ROTATION_SPEED, dt);
+        if ai::can_see(me, target, std::f32::consts::PI / 8.0f32) {
+            ai::shoot(me, bullet_system, 0);
+        }
     }
 }
 
@@ -117,7 +156,7 @@ fn test_render(
 pub fn player_ship() -> Ship {
     Ship::new(
         Core::new(3, 5.0f32, CollisionModelIndex::Player, Team::Earth),
-        no_ai,
+        None,
         test_render,
         array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 5.0f32, 0)],
         array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::tester_bullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32))],
@@ -127,7 +166,7 @@ pub fn player_ship() -> Ship {
 pub fn turret_ship() -> Ship {
     Ship::new(
         Core::new(3, 100.0f32, CollisionModelIndex::Player, Team::Hive),
-        turret_ai,
+        Some(RoutineId(0)),
         test_render,
         array_vec![],
         array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::laser_ball, Duration::from_millis(400), vec2(0.0f32, 1.0f32))],

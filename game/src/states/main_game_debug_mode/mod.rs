@@ -4,16 +4,31 @@ use std::error::Error as StdError;
 
 use super::{ TransitionRequest, GameState, main_game };
 
+use egui_glium::EguiGlium;
 use glium::{ Frame, Surface, glutin };
 use lazy_static::lazy_static;
 use glutin::{ event, event_loop::ControlFlow };
 use cgmath::{ EuclideanSpace, Point2, point2, vec2 };
-use egui_glium::EguiGlium;
-use egui::{ epaint::ClippedShape, Widget, Sense, Id };
+use egui::{ epaint::ClippedShape, Widget, Sense, Id, Ui };
 
 use ship_parts::Ship;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
+
+use std::str::FromStr;
+
+fn input_box<T : FromStr + ToString>(ui : &mut Ui, buffer : &mut String, target : &mut T, header : &'static str) {
+    if 
+        egui::TextEdit::singleline(buffer)
+        .hint_text(header)
+        .desired_width(50.0f32)
+        .ui(ui)
+        .lost_focus() 
+    {
+        if let Ok(new_target) = buffer.trim().parse() { *target = new_target; }
+        else { *buffer = target.to_string() }
+    }
+}
 
 #[derive(Debug)]
 pub struct DebugModeEntranceError;
@@ -44,8 +59,12 @@ enum DebugState {
         current_ship : Ship,
     },
     InspectingShip {
+        // Selection of ship
         id : usize,
         input : String,
+        // Ship fields
+        hp : String,
+        mass : String,
     },
 }
 
@@ -74,8 +93,12 @@ impl DebugState {
 
     fn inspecting_ship() -> Self {
         Self::InspectingShip {
+            // Ship selection
             id : 0,
             input : 0.to_string(),
+            // Ship fields
+            hp : String::new(),
+            mass : String::new(),
         }
     }
 
@@ -99,8 +122,6 @@ pub struct StateData {
     state : DebugState,
     // ui backend
     pointer_inside_panel : bool,
-    eg : EguiGlium,
-    draw_req : Option<Vec<ClippedShape>>,
 }
 
 impl StateData {
@@ -115,8 +136,6 @@ impl StateData {
                         state : DebugState::FreeCam,
                         // ui backend init
                         pointer_inside_panel : true,
-                        eg : EguiGlium::new(&ctx.display),
-                        draw_req : None,
                     }
                 )
             },
@@ -131,12 +150,6 @@ impl StateData {
         
         match event {
             event::Event::WindowEvent { event, window_id } => {
-                // Avoid handing the real control flow to `egui` for now.
-                // Waiting for the reply:
-                // https://github.com/emilk/egui/issues/434
-                let mut dummy = ControlFlow::Exit;
-                self.eg.on_event(event.clone(), &mut dummy);
-                
                 match event {
                     event::WindowEvent::MouseInput {
                         state,
@@ -179,7 +192,13 @@ impl StateData {
     /// The update routine of the state.
     /// This procedure is responsible for everything.
     #[inline]
-    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, dt : Duration) -> Option<TransitionRequest> {
+    pub fn update(
+        &mut self, 
+        ctx : &mut GraphicsContext, 
+        input_tracker : &InputTracker, 
+        dt : Duration,
+        egui : &mut EguiGlium,
+    ) -> Option<TransitionRequest> {
         use glutin::event::VirtualKeyCode as Key;
         use sys_api::graphics_init::SCREEN_WIDTH;
 
@@ -187,10 +206,8 @@ impl StateData {
         // place the ship according to mouse pos and camera pos
         
         let look = &mut self.look;
-        let egui = &mut self.eg;
         let state = &mut self.state;
         let captured_state = &mut self.captured_state;
-        egui.begin_frame(&ctx.display);
 
         let mut quit = false;
         self.pointer_inside_panel =     
@@ -235,7 +252,7 @@ impl StateData {
                                 if egui::Button::new("stop placing").ui(ui).clicked() { *placing = false; }
                             }
                         },
-                        DebugState::InspectingShip { id, input } => {
+                        DebugState::InspectingShip { id, input, hp, mass } => {
 
                             ui.horizontal(
                             |ui| {
@@ -259,14 +276,24 @@ impl StateData {
                             });
 
                             // Printing data about the ship
-                            match captured_state.battlefield.get(*id) {
+                            match captured_state.battlefield.get_mut(*id) {
                                 None => { 
                                     ui.heading("No ship at this cell");
                                 }
                                 Some(ship) => {
+                                    // TODO labels for the input_boxes
+                                    let dir = ship.core.direction();
+                                    input_box(ui, mass, &mut ship.core.mass, "mass");
                                     ui.heading(format!("pos : {}, {}", ship.core.pos.x, ship.core.pos.y));
-                                    ui.heading(format!("hp : {}", ship.core.hp()));
+                                    ui.heading(format!("direction : {}, {}", dir.x, dir.y));
+                                    ui.heading(format!("force : {}, {}", ship.core.force.x, ship.core.force.y));
+                                    input_box(ui, hp, unsafe { ship.core.hp_mut() }, "hp");
                                     ui.heading(format!("team : {:?}", ship.core.team()));
+                                
+                                    egui::Separator::default()
+                                    .horizontal()
+                                    .ui(ui);
+
                                     ship.engines.iter()
                                     .enumerate()
                                     .for_each(
@@ -274,6 +301,11 @@ impl StateData {
                                             ui.heading(format!("engine{} : {:?}", id, engine));
                                         }
                                     );
+                        
+                                    egui::Separator::default()
+                                    .horizontal()
+                                    .ui(ui);
+
                                     ship.guns.iter()
                                     .enumerate()
                                     .for_each(
@@ -292,10 +324,6 @@ impl StateData {
             .map(|x| rect.contains(x))
             .unwrap_or(false)
         };
-
-        let (_, shapes) = egui.end_frame(&ctx.display);
-
-        self.draw_req = Some(shapes);
        
         match &mut self.state {
             DebugState::PlacingShip { current_ship, placed_ship_info, .. } if !self.pointer_inside_panel => {
@@ -317,7 +345,7 @@ impl StateData {
     }
 
     #[inline]
-    pub fn render(&mut self, frame : &mut Frame, ctx : &mut GraphicsContext, targets : &mut RenderTargets, input_tracker : &InputTracker) {
+    pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, targets : &mut RenderTargets, input_tracker : &InputTracker) {
         self.captured_state.render(frame, ctx, targets, input_tracker);
         
         let vp = ctx.build_projection_view_matrix();
@@ -348,9 +376,6 @@ impl StateData {
             }
             _ => (),
         }
-        
-        self.draw_req.take()
-        .map(|x| self.eg.paint(&ctx.display, frame, x));
     }
 
     pub fn unwrap(_ : &mut GraphicsContext, g : GameState) -> GameState {

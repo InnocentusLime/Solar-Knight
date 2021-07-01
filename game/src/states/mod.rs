@@ -1,7 +1,10 @@
 use std::time::Duration;
 use std::error::Error as StdError;
 
-use glium::{ glutin, Surface };
+use egui::Ui;
+use egui_glium::EguiGlium;
+use glium::{ glutin, Surface, Frame };
+use downcast_rs::{ Downcast, impl_downcast };
 
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
@@ -135,7 +138,12 @@ impl GameState {
 
     /// The event processing procedure of the state.
     #[inline]
-    pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<'static, ()>) -> Option<TransitionRequest> {
+    pub fn process_event(
+        &mut self, 
+        ctx : &mut GraphicsContext, 
+        input_tracker : &InputTracker, 
+        event : &glutin::event::Event<'static, ()>,
+    ) -> Option<TransitionRequest> {
         match self {
             GameState::Booting(x) => x.process_event(ctx, input_tracker, event),
             GameState::MainMenu(x) => x.process_event(ctx, input_tracker, event),
@@ -149,30 +157,39 @@ impl GameState {
     /// The update routine of the state.
     /// This procedure is responsible for everything.
     #[inline]
-    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, dt : Duration) -> Option<TransitionRequest> {
+    pub fn update(
+        &mut self, 
+        ctx : &mut GraphicsContext, 
+        input_tracker : &InputTracker, 
+        dt : Duration,
+        egui : &mut EguiGlium,
+    ) -> Option<TransitionRequest> {
         match self {
-            GameState::Booting(x) => x.update(ctx, input_tracker, dt),
-            GameState::MainMenu(x) => x.update(ctx, input_tracker, dt),
-            GameState::MainGame(x) => x.update(ctx, input_tracker, dt),
-            GameState::MainGameDebugMode(x) => x.update(ctx, input_tracker, dt),
-            GameState::Testing(x) => x.update(ctx, input_tracker, dt),
+            GameState::Booting(x) => x.update(ctx, input_tracker, dt, egui),
+            GameState::MainMenu(x) => x.update(ctx, input_tracker, dt, egui),
+            GameState::MainGame(x) => x.update(ctx, input_tracker, dt, egui),
+            GameState::MainGameDebugMode(x) => x.update(ctx, input_tracker, dt, egui),
+            GameState::Testing(x) => x.update(ctx, input_tracker, dt, egui),
             _ => None,
         }
     }
 
     #[inline]
-    pub fn render(&mut self, ctx : &mut GraphicsContext, targets : &mut RenderTargets, input_tracker : &InputTracker) {
-        let mut frame = ctx.display.draw();
-        frame.clear_color(0.0f32, 0.0f32, 0.0f32, 1.0f32);
+    pub fn render(
+        &self, 
+        frame : &mut Frame,
+        ctx : &mut GraphicsContext, 
+        targets : &mut RenderTargets, 
+        input_tracker : &InputTracker
+    ) {
         match self {
-            GameState::Booting(x) => x.render(&mut frame, ctx, targets, input_tracker),
-            GameState::MainMenu(x) => x.render(&mut frame, ctx, targets, input_tracker),
-            GameState::MainGame(x) => x.render(&mut frame, ctx, targets, input_tracker),
-            GameState::MainGameDebugMode(x) => x.render(&mut frame, ctx, targets, input_tracker),
-            GameState::Testing(x) => x.render(&mut frame, ctx, targets, input_tracker),
+            GameState::Booting(x) => x.render(frame, ctx, targets, input_tracker),
+            GameState::MainMenu(x) => x.render(frame, ctx, targets, input_tracker),
+            GameState::MainGame(x) => x.render(frame, ctx, targets, input_tracker),
+            GameState::MainGameDebugMode(x) => x.render(frame, ctx, targets, input_tracker),
+            GameState::Testing(x) => x.render(frame, ctx, targets, input_tracker),
             _ => (),
         }
-        frame.finish().unwrap();
     }
 }
 

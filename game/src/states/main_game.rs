@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use egui_glium::EguiGlium;
 use cgmath::abs_diff_ne;
 use cgmath::{ EuclideanSpace, InnerSpace, One, Point2, vec2, point2 };
 use glium::{ glutin, Frame };
@@ -155,7 +156,13 @@ impl StateData {
         None 
     }
 
-    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, dt : Duration) -> Option<TransitionRequest> {
+    pub fn update(
+        &mut self, 
+        ctx : &mut GraphicsContext, 
+        input_tracker : &InputTracker, 
+        dt : Duration,
+        _egui : &mut EguiGlium,
+    ) -> Option<TransitionRequest> {
         if let Some(player) = self.battlefield.get(0) {
             assert!(player.core.team() == Team::Earth);
             if !player.core.is_alive() { 

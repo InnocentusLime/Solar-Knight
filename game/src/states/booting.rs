@@ -4,10 +4,10 @@ use super::{ GameState, TransitionRequest };
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
 
+use egui_glium::EguiGlium;
 use glium::{ glutin, Frame };
 use glutin::{ event, event_loop::ControlFlow };
-use egui_glium::EguiGlium;
-use egui::{ epaint::ClippedShape, Widget, Sense, Id };
+use egui::{ epaint::ClippedShape, Widget, Sense, Id, Ui };
 
 const SLEEP_FRAMES : u64 = 100;
 
@@ -17,8 +17,6 @@ pub struct StateData {
 
     // Entrance controller
     debug_menu_open : bool,
-    eg : EguiGlium,
-    draw_req : Option<Vec<ClippedShape>>,
 }
 
 impl StateData {
@@ -28,8 +26,6 @@ impl StateData {
                 frame_counter : 0,
                 
                 debug_menu_open : false,
-                eg : EguiGlium::new(&ctx.display),
-                draw_req : None,
             } 
         )
     }
@@ -38,13 +34,6 @@ impl StateData {
         use glutin::event;
         
         match event {
-            event::Event::WindowEvent { event, window_id } => {
-                // Avoid handing the real control flow to `egui` for now.
-                // Waiting for the reply:
-                // https://github.com/emilk/egui/issues/434
-                let mut dummy = ControlFlow::Exit;
-                self.eg.on_event(event.clone(), &mut dummy);
-            },
             event::Event::DeviceEvent {
                 event : event::DeviceEvent::Key (
                     event::KeyboardInput {
@@ -69,7 +58,13 @@ impl StateData {
         None 
     }
 
-    pub fn update(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, _dt : Duration) -> Option<TransitionRequest> {
+    pub fn update(
+        &mut self, 
+        ctx : &mut GraphicsContext, 
+        input_tracker : &InputTracker, 
+        _dt : Duration,
+        egui : &mut EguiGlium,
+    ) -> Option<TransitionRequest> {
         use super::{ main_menu, testing, main_game };
         use glutin::event;
 
@@ -81,9 +76,6 @@ impl StateData {
            
         let mut state_req : Option<TransitionRequest> = None;
         if self.debug_menu_open {
-            let egui = &mut self.eg;
-
-            egui.begin_frame(&ctx.display);
             egui::SidePanel::left("debug_menu", 350.0)
             .show(egui.ctx(), |ui| {
                 ui.heading("Debug menu");
@@ -91,15 +83,10 @@ impl StateData {
                 if ui.button("Main game").clicked() { state_req = Some(Box::new(main_game::StateData::init)); }
                 if ui.button("Test room").clicked() { state_req = Some(Box::new(testing::StateData::init)); }
             });
-            let (_, shapes) = egui.end_frame(&ctx.display);
-            self.draw_req = Some(shapes);
         }
 
         state_req
     }
 
-    pub fn render(&mut self, frame : &mut Frame, ctx : &mut GraphicsContext, _targets : &mut RenderTargets, _input_tracker : &InputTracker) {
-        self.draw_req.take()
-        .map(|x| self.eg.paint(&ctx.display, frame, x));
-    }
+    pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, _targets : &mut RenderTargets, _input_tracker : &InputTracker) {}
 }

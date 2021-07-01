@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use egui_glium::EguiGlium;
 use glium::{ glutin, Frame };
 use glium::texture::texture2d::Texture2d;
 
@@ -43,7 +44,13 @@ impl StateData {
         }
     }
 
-    pub fn update(&mut self, _ctx : &mut GraphicsContext, _input_tracker : &InputTracker, _dt : Duration) -> Option<TransitionRequest> {
+    pub fn update(
+        &mut self, 
+        _ctx : &mut GraphicsContext, 
+        _input_tracker : &InputTracker, 
+        _dt : Duration,
+        _egui : &mut EguiGlium,
+    ) -> Option<TransitionRequest> {
         None
     }
 

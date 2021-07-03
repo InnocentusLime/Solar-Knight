@@ -19,14 +19,13 @@ pub use crate::storage_traits::{ Ship, Battlefield, RoutineId };
 
 use std::time::Duration;
 
-use tinyvec::array_vec;
+use lazy_static::lazy_static;
 use cgmath::{ Vector2, Point2, InnerSpace, vec2, abs_diff_ne, abs_diff_eq };
 
 use crate::core::Core;
 use crate::engine::Engine;
 use crate::gun::{ Gun, Bullet };
 use crate::part_trait::ShipPart;
-use crate::collision_models::model_indices::*;
 use crate::constants::VECTOR_NORMALIZATION_RANGE;
 
 use cgmath_ext::rotate_vector_ox;
@@ -151,24 +150,4 @@ fn test_render(
     ;
 
     buff.put(dat);
-}
-
-pub fn player_ship() -> Ship {
-    Ship::new(
-        Core::new(3, 5.0f32, CollisionModelIndex::Player, Team::Earth),
-        None,
-        test_render,
-        array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 5.0f32, 0)],
-        array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::tester_bullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32))],
-    )
-}
-
-pub fn turret_ship() -> Ship {
-    Ship::new(
-        Core::new(3, 100.0f32, CollisionModelIndex::Player, Team::Hive),
-        Some(RoutineId(0)),
-        test_render,
-        array_vec![],
-        array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::laser_ball, Duration::from_millis(400), vec2(0.0f32, 1.0f32))],
-    )
 }

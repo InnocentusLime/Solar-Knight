@@ -6,12 +6,11 @@ use super::{ TransitionRequest, GameState, main_game };
 
 use egui_glium::EguiGlium;
 use glium::{ Frame, Surface, glutin };
-use lazy_static::lazy_static;
 use glutin::{ event, event_loop::ControlFlow };
 use cgmath::{ EuclideanSpace, Point2, point2, vec2 };
 use egui::{ epaint::ClippedShape, Widget, Sense, Id, Ui };
 
-use ship_parts::Ship;
+use ship_parts::{ Ship, Battlefield };
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
 
@@ -40,15 +39,6 @@ impl fmt::Display for DebugModeEntranceError {
 }
 
 impl StdError for DebugModeEntranceError {}
-
-lazy_static! {
-    static ref TEMPLATE_TABLE : [fn() -> Ship; 2] =
-        [
-            ship_parts::player_ship,
-            ship_parts::turret_ship,
-        ]
-    ;
-}
 
 #[derive(Clone)]
 enum DebugState {
@@ -83,11 +73,11 @@ impl DebugState {
     
     fn placing_ship_display_str() -> &'static str { "Placing ship" }
 
-    fn placing_ship() -> Self {
+    fn placing_ship(battlefield : &Battlefield) -> Self {
         Self::PlacingShip {
             placing : false,
             placed_ship_info : 0,
-            current_ship : (TEMPLATE_TABLE[0])(),
+            current_ship : battlefield.template_table[0].prefab,
         }
     }
 
@@ -225,7 +215,7 @@ impl StateData {
                         ui,
                         |ui| {
                             ui.selectable_value(state, DebugState::free_cam(), DebugState::free_cam_display_str());
-                            ui.selectable_value(state, DebugState::placing_ship(), DebugState::placing_ship_display_str());
+                            ui.selectable_value(state, DebugState::placing_ship(&captured_state.battlefield), DebugState::placing_ship_display_str());
                             ui.selectable_value(state, DebugState::inspecting_ship(), DebugState::inspecting_ship_display_str());
                         }
                     );
@@ -242,8 +232,8 @@ impl StateData {
                             .show_index(
                                 ui, 
                                 placed_ship_info,
-                                TEMPLATE_TABLE.len(),
-                                |u| u.to_string()
+                                captured_state.battlefield.template_table.len(),
+                                |u| captured_state.battlefield.template_table[u].name.to_owned()
                             );
     
                             if !*placing {
@@ -327,7 +317,7 @@ impl StateData {
        
         match &mut self.state {
             DebugState::PlacingShip { current_ship, placed_ship_info, .. } if !self.pointer_inside_panel => {
-                *current_ship = (TEMPLATE_TABLE[*placed_ship_info])();
+                *current_ship = self.captured_state.battlefield.template_table[*placed_ship_info].prefab;
                 current_ship.core.pos = self.look + mv;
             },
             _ => (),

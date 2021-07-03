@@ -4,16 +4,18 @@ use std::time::Duration;
 use crate::earth::Earth;
 use crate::core::{ Core, Team };
 use crate::engine::Engine;
-use crate::gun::{ BulletSystem, TargetSystem, Gun };
+use crate::gun::{ BulletSystem, TargetSystem, Gun, Bullet };
 
 use std_ext::ExtractResultMut;
 use sys_api::basic_graphics_data::SpriteData;
 use sys_api::graphics_init::SpriteDataWriter;
 use crate::constants::VECTOR_NORMALIZATION_RANGE;
 use cgmath_ext::rotate_vector_ox;
+use crate::collision_models::model_indices::*;
 
 use glium::VertexBuffer;
 use tinyvec::ArrayVec;
+use tinyvec::array_vec;
 use cgmath::{ Point2, Matrix4, EuclideanSpace, InnerSpace, vec2, abs_diff_ne, abs_diff_eq };
 
 pub static mut FRICTION_KOEFF : f32 = 0.5f32;
@@ -357,10 +359,49 @@ impl Ship {
     }
 }
 
+use crate::test_render;
+pub struct TemplateTableEntry {
+    pub name : String,
+    pub prefab : Ship,
+}
+
+// Temporary code. In the future we want
+// to serialize all that jazz and have it
+// in the files.
+// Data driven design 101 ;)
+impl TemplateTableEntry {
+    pub fn player_ship() -> Self {
+        TemplateTableEntry {
+            name : "Player ship".to_owned(),
+            prefab : Ship::new(
+                Core::new(3, 5.0f32, CollisionModelIndex::Player, Team::Earth),
+                None,
+                test_render,
+                array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 5.0f32, 0)],
+                array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::tester_bullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32))],
+            ),
+        }
+    }
+
+    pub fn turret_ship() -> Self {
+        TemplateTableEntry {
+            name : "Turret enemy".to_owned(),
+            prefab : Ship::new(
+                Core::new(3, 100.0f32, CollisionModelIndex::Player, Team::Hive),
+                Some(RoutineId(0)),
+                test_render,
+                array_vec![],
+                array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::laser_ball, Duration::from_millis(400), vec2(0.0f32, 1.0f32))],
+            ),
+        }
+    }
+}
+
 pub struct Battlefield {
     pub earth : Earth,
     mem : Vec<Ship>,
     pub ai_machine : AiMachine,
+    pub template_table : Vec<TemplateTableEntry>,
 }
 
 impl Battlefield {
@@ -369,6 +410,10 @@ impl Battlefield {
             mem : Vec::new(),
             earth : Earth::new(),
             ai_machine : AiMachine::new(),
+            template_table : vec![
+                TemplateTableEntry::player_ship(),
+                TemplateTableEntry::turret_ship(),
+            ],
         }
     }
 
@@ -423,6 +468,10 @@ impl Battlefield {
     
     pub fn spawn(&mut self, ship : Ship) {
         self.mem.push(ship);
+    }
+
+    pub fn spawn_template(&mut self, id : usize) {
+        self.mem.push(self.template_table[id].prefab);
     }
             
     pub fn fill_buffer(&self, buff : &mut VertexBuffer<SpriteData>) {

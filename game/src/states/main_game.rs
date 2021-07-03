@@ -83,7 +83,7 @@ impl StateData {
 
         let mut battlefield = Battlefield::new();
 
-        battlefield.spawn(ship_parts::player_ship());
+        battlefield.spawn_template(0);
                 
         let mut me =
             StateData {

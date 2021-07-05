@@ -22,20 +22,20 @@ fn input_box<T : FromStr + ToString>(ui : &mut Ui, buffer : &mut String, target 
     }
 }
 
-pub fn create(captured_state : &main_game::StateData) -> Box<dyn DebugState> {
-    Box::new(
-        ShipInspector {
-            id : 0,
-            input : "".to_owned(),
-            hp : "".to_owned(),
-            mass : "".to_owned(),
-        }
-    )
+impl ShipInspector {
+    pub fn new(captured_state : &main_game::StateData) -> Box<dyn DebugState> {
+        Box::new(
+            ShipInspector {
+                id : 0,
+                input : "".to_owned(),
+                hp : "".to_owned(),
+                mass : "".to_owned(),
+            }
+        )
+    }
 }
 
-
 impl DebugState for ShipInspector {
-
     fn name(&self) -> &'static str {
         "Ship inspector"
     }

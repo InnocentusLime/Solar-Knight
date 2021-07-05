@@ -2,8 +2,10 @@ use super::*;
 
 pub struct FreeCam;
 
-pub fn create(captured_state : &main_game::StateData) -> Box<dyn DebugState> {
-    Box::new(FreeCam)
+impl FreeCam {
+    pub fn new(captured_state : &main_game::StateData) -> Box<dyn DebugState> {
+        Box::new(FreeCam)
+    }
 }
 
 impl DebugState for FreeCam {

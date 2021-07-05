@@ -14,6 +14,7 @@ use ship_parts::{ Ship, Battlefield };
 
 use std::str::FromStr;
 
+// TODO create a prelude
 pub use egui::Ui;
 pub use super::main_game;
 pub use sys_api::input_tracker::InputTracker;
@@ -85,9 +86,9 @@ impl StateData {
                         // Basic init
                         look : captured_state.player_pos(),
                         states : vec![
-                            free_cam::create(&captured_state),
-                            ship_placement::create(&captured_state),
-                            ship_inspector::create(&captured_state),
+                            free_cam::FreeCam::new(&captured_state),
+                            ship_placement::ShipPlacement::new(&captured_state),
+                            ship_inspector::ShipInspector::new(&captured_state),
                         ],
                         state_id : 0,
                         captured_state,

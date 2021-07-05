@@ -6,14 +6,16 @@ pub struct ShipPlacement {
     current_ship : Ship,
 }
 
-pub fn create(captured_state : &main_game::StateData) -> Box<dyn DebugState> {
-    Box::new(
-        ShipPlacement {
-            placing : false,
-            placed_ship_info : 0,
-            current_ship : captured_state.battlefield.template_table[0].prefab,
-        }
-    )
+impl ShipPlacement {
+    pub fn new(captured_state : &main_game::StateData) -> Box<dyn DebugState> {
+        Box::new(
+            ShipPlacement {
+                placing : false,
+                placed_ship_info : 0,
+                current_ship : captured_state.battlefield.template_table[0].prefab,
+            }
+        )
+    }
 }
 
 impl DebugState for ShipPlacement {

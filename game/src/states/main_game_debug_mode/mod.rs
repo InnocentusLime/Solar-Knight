@@ -7,7 +7,6 @@ use super::{ TransitionRequest, GameState };
 use egui_glium::EguiGlium;
 use glium::{ Frame, Surface, glutin };
 use glutin::{ event, event_loop::ControlFlow };
-use cgmath::{ EuclideanSpace, Point2, point2, vec2 };
 use egui::{ epaint::ClippedShape, Widget, Sense, Id };
 
 use ship_parts::{ Ship, Battlefield };
@@ -19,6 +18,7 @@ pub use egui::Ui;
 pub use super::main_game;
 pub use sys_api::input_tracker::InputTracker;
 pub use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
+pub use cgmath::{ EuclideanSpace, InnerSpace, Point2, point2, vec2 };
 
 mod free_cam;
 mod ship_placement;

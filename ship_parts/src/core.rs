@@ -125,4 +125,10 @@ impl Core {
         assert_abs_diff_eq!(direction.magnitude(), 1.0f32, epsilon = VECTOR_NORMALIZATION_RANGE);
         self.direction = direction;
     } 
+
+    #[inline]
+    pub fn set_direction_angle(&mut self, ang : f32) {
+        let (s, c) = (std::f32::consts::FRAC_PI_2 - ang).sin_cos();
+        self.set_direction(vec2(c, s));
+    }
 }

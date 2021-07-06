@@ -121,7 +121,7 @@ impl DebugState for ShipInspector {
         pointer_in_ui : bool,
         look : &mut Point2<f32>,
     ) {
-        // Waiting for 1.53
+        // Waiting for 1.54 now, I guess
         let old_id = self.id;
         let input = &mut self.input;
         let id = &mut self.id;

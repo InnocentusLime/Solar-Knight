@@ -59,6 +59,7 @@ pub enum CommandError {
     TargetOutOfRange,
     TriedToTargetSelf,
     GunNotPresent,
+    EngineNotPresent,
 }
 
 // Ai routine is a block of commands which decide ships new state and
@@ -91,6 +92,14 @@ pub enum AiCommand {
     // TODO make it branch?
     Shoot {
         gun : usize,
+        next : CommandId,
+    },
+    IncreaseSpeed {
+        engine : usize,
+        next : CommandId,
+    },
+    DecreaseSpeed {
+        engine : usize,
         next : CommandId,
     },
 }
@@ -147,7 +156,6 @@ impl AiCommand {
             } => {
                 let target = target.get_pos(others, earth);
                 let dir_vec = (target - me.core.pos).normalize();
-                let dir_vec = dir_vec.normalize();
                 let ang = me.core.direction().angle(dir_vec);
 
                 if abs_diff_ne!(ang.0, 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
@@ -177,6 +185,30 @@ impl AiCommand {
                         Ok(ExecutionControl::GoTo(next))
                     },
                     None => Err(CommandError::GunNotPresent),
+                }
+            },
+            AiCommand::IncreaseSpeed {
+                engine,
+                next,
+            } => {
+                match me.engines.get_mut(engine) {
+                    Some(engine) => {
+                        engine.increase_speed();
+                        Ok(ExecutionControl::GoTo(next))
+                    },
+                    None => Err(CommandError::EngineNotPresent),
+                }
+            },
+            AiCommand::DecreaseSpeed {
+                engine,
+                next,
+            } => {
+                match me.engines.get_mut(engine) {
+                    Some(engine) => {
+                        engine.increase_speed();
+                        Ok(ExecutionControl::GoTo(next))
+                    },
+                    None => Err(CommandError::EngineNotPresent),
                 }
             },
         }

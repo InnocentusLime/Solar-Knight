@@ -102,7 +102,6 @@ pub struct Gun {
     recoil : Duration,
     timer : Duration,
     direction : Vector2<f32>,
-    core_direction_dependent : bool,
 }
 
 impl Gun {
@@ -111,7 +110,6 @@ impl Gun {
         bullet_maker : fn(Point2<f32>, Vector2<f32>, Team) -> Bullet,
         recoil : Duration,
         direction : Vector2<f32>,
-        core_direction_dependent : bool,
     ) -> Self {
         // FIXME direction check
 
@@ -121,7 +119,6 @@ impl Gun {
             recoil,
             timer : <Duration as DurationExt>::my_zero(),
             direction,
-            core_direction_dependent,
         }
     }
             
@@ -133,16 +130,8 @@ impl Gun {
     pub fn shoot(&mut self, owner : &crate::core::Core) -> Option<crate::gun::Bullet> {
         if self.can_shoot() {
             self.timer = self.recoil;
-
-            let bullet_dir =
-                if self.core_direction_dependent {
-                    rotate_vector_oy(owner.direction(), self.direction)
-                } else {
-                    self.direction
-                }
-            ;
-            
             let off = rotate_vector_oy(owner.direction(), self.offset);
+            let bullet_dir = rotate_vector_oy(owner.direction(), self.direction);
 
             Some(
                 (self.bullet_maker)(
@@ -165,8 +154,7 @@ impl Default for Gun {
             vec2(0.0f32, 0.0f32),
             Bullet::tester_bullet,
             <Duration as DurationExt>::my_zero(),
-            vec2(0.0f32, 1.0f32),
-            false
+            vec2(0.0f32, 1.0f32)
         )
     }
 }

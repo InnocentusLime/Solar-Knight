@@ -410,7 +410,7 @@ impl TemplateTableEntry {
                 None,
                 test_render,
                 array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 5.0f32, 0)],
-                array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::tester_bullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32), true)],
+                array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::tester_bullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32))],
             ),
         }
     }
@@ -423,7 +423,7 @@ impl TemplateTableEntry {
                 Some(RoutineId(0)),
                 test_render,
                 array_vec![],
-                array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::laser_ball, Duration::from_millis(400), vec2(0.0f32, 1.0f32), true)],
+                array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::laser_ball, Duration::from_millis(400), vec2(0.0f32, 1.0f32))],
             ),
         }
     }

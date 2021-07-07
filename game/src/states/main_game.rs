@@ -10,6 +10,7 @@ use glutin::event::{ MouseButton };
 
 use ship_parts::constants::VECTOR_NORMALIZATION_RANGE;
 use ship_parts::{ BulletSystem, Team, Battlefield };
+use ship_parts::attachment::AttachmentSystem;
 use super::{ GameState, TransitionRequest, main_menu, main_game_debug_mode };
 use std_ext::*;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
@@ -69,6 +70,7 @@ pub struct StateData {
     timer : Duration,
     pointer_target : PointerTarget,
     bullet_sys : BulletSystem,
+    pub attach_sys : AttachmentSystem,
 }
 
 impl StateData {
@@ -98,6 +100,7 @@ impl StateData {
                 timer : SPAWN_RATE,
                 pointer_target : PointerTarget::None,
                 bullet_sys : BulletSystem::new(),
+                attach_sys : AttachmentSystem::new(),
                 battlefield,
             }
         ;
@@ -213,6 +216,7 @@ impl StateData {
 
         self.battlefield.update(dt);
         self.bullet_sys.update(&mut self.battlefield, dt);
+        self.attach_sys.update(&mut self.battlefield);
         self.battlefield.think(&mut self.bullet_sys, dt);
        
         if let Some(player) = self.battlefield.get(0) {

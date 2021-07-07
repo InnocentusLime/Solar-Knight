@@ -13,6 +13,7 @@ use crate::constants::VECTOR_NORMALIZATION_RANGE;
 use cgmath_ext::rotate_vector_ox;
 use crate::collision_models::model_indices::*;
 
+use slab::Slab;
 use glium::VertexBuffer;
 use tinyvec::ArrayVec;
 use tinyvec::array_vec;
@@ -33,17 +34,18 @@ pub enum Target {
 //  Current,
 }
 
+// TODO make generic
 impl Target {
     // TODO all those ship_id checks should
     // go here.
     fn get_pos(
         self,
-        others : &std_ext::ExtractResultMut<Ship>, 
+        storage : &Slab<Ship>, 
         earth : &Earth,
     ) -> Point2<f32> {
         match self {
             Target::Earth => earth.pos(),
-            Target::Ship(ship_id) => others[ship_id].core.pos,
+            Target::Ship(ship_id) => storage[ship_id].core.pos,
         }
     }
 }
@@ -104,11 +106,12 @@ pub enum AiCommand {
     },
 }
 
+// TODO make generic
 impl AiCommand {
     pub fn run(
         self, 
-        me : &mut Ship,
-        others : &std_ext::ExtractResultMut<Ship>, 
+        me : usize,
+        storage : &mut Slab<Ship>, 
         bullet_system : &mut crate::gun::BulletSystem,
         earth : &Earth,
         dt : Duration,
@@ -126,7 +129,8 @@ impl AiCommand {
                 on_success,
                 on_failure,
             } => {
-                let target = target.get_pos(others, earth);
+                let me = storage.get(me).unwrap();
+                let target = target.get_pos(storage, earth);
                 let dir_vec = (target - me.core.pos).normalize();
                 if dir_vec.magnitude() <= distance {
                     Ok(ExecutionControl::GoTo(on_success))
@@ -140,7 +144,8 @@ impl AiCommand {
                 on_success,
                 on_failure,
             } => {
-                let target = target.get_pos(others, earth);
+                let me = storage.get(me).unwrap();
+                let target = target.get_pos(storage, earth);
                 let dir_vec = target - me.core.pos;
                 let ang = me.core.direction().angle(dir_vec);
                 if ang.0.abs() <= view_angle / 2.0f32 {
@@ -154,7 +159,8 @@ impl AiCommand {
                 angular_speed,
                 next,
             } => {
-                let target = target.get_pos(others, earth);
+                let target = target.get_pos(storage, earth);
+                let me = storage.get_mut(me).unwrap();
                 let dir_vec = (target - me.core.pos).normalize();
                 let ang = me.core.direction().angle(dir_vec);
 
@@ -175,6 +181,7 @@ impl AiCommand {
                 gun,
                 next,
             } => {
+                let me = storage.get_mut(me).unwrap();
                 match me.guns.get_mut(gun) {
                     Some(gun) => {
                         gun.shoot(&me.core) 
@@ -191,6 +198,7 @@ impl AiCommand {
                 engine,
                 next,
             } => {
+                let me = storage.get_mut(me).unwrap();
                 match me.engines.get_mut(engine) {
                     Some(engine) => {
                         engine.increase_speed();
@@ -203,9 +211,10 @@ impl AiCommand {
                 engine,
                 next,
             } => {
+                let me = storage.get_mut(me).unwrap();
                 match me.engines.get_mut(engine) {
                     Some(engine) => {
-                        engine.increase_speed();
+                        engine.decrease_speed();
                         Ok(ExecutionControl::GoTo(next))
                     },
                     None => Err(CommandError::EngineNotPresent),
@@ -247,8 +256,8 @@ impl AiRoutine {
 
     pub fn run(
         &self,
-        me : &mut Ship,
-        others : &std_ext::ExtractResultMut<Ship>, 
+        me : usize,
+        storage : &mut Slab<Ship>, 
         bullet_system : &mut crate::gun::BulletSystem,
         earth : &Earth,
         dt : Duration,
@@ -275,7 +284,7 @@ impl AiRoutine {
                     routine_status =
                     cmd.run(
                         me,
-                        others, 
+                        storage, 
                         bullet_system,
                         earth,
                         dt
@@ -333,18 +342,25 @@ impl AiMachine {
     }
 
     // TODO return a Result
+    // FIXME get rid off the checks by making the code
+    // indepent from the ship itself
     pub fn think_for(
         &self,
-        me : &mut Ship,
-        others : &std_ext::ExtractResultMut<Ship>, 
+        me : usize,
+        storage : &mut Slab<Ship>, 
         bullet_system : &mut crate::gun::BulletSystem,
         earth : &Earth,
         dt : Duration,
     ) {
-        match me.think {
-            Some(think) => me.think = Some(self.routines[think.0].run(me, others, bullet_system, earth, dt).unwrap()),
-            None => (),
-        }
+        let ship = storage.get_mut(me).unwrap();
+        let new_think = {
+            match ship.think {
+                Some(think) => Some(self.routines[think.0].run(me, storage, bullet_system, earth, dt).unwrap()),
+                None => None,
+            }
+        };
+        let ship = storage.get_mut(me).unwrap();
+        ship.think = new_think;
     }
 }
 
@@ -430,8 +446,9 @@ impl TemplateTableEntry {
 }
 
 pub struct Battlefield {
+    uid_counter : u128,
     pub earth : Earth,
-    mem : Vec<Ship>,
+    mem : Slab<Ship>,
     pub ai_machine : AiMachine,
     pub template_table : Vec<TemplateTableEntry>,
 }
@@ -439,7 +456,8 @@ pub struct Battlefield {
 impl Battlefield {
     pub fn new() -> Battlefield {
         Battlefield {
-            mem : Vec::new(),
+            uid_counter : 0,
+            mem : Slab::new(),
             earth : Earth::new(),
             ai_machine : AiMachine::new(),
             template_table : vec![
@@ -458,7 +476,7 @@ impl Battlefield {
 
         self.mem.iter_mut()
         .for_each(
-            |c| {
+            |(_, c)| {
                 c.core.force = vec2(0.0f32, 0.0f32);
 
                 let (core, engines, guns) = (&mut c.core, &mut c.engines, &mut c.guns);
@@ -476,20 +494,25 @@ impl Battlefield {
             }
         );
 
-        self.mem.retain(|x| x.core.is_alive() || x.core.team() == Team::Earth);
+        self.mem.retain(|_, x| x.core.is_alive() || x.core.team() == Team::Earth);
     }
-            
+  
+    // TODO needs fixing for some more consistent logic
     pub fn think(&mut self, bullet_system : &mut BulletSystem, dt : Duration) {
         use std_ext::*;
 
         for i in 0..self.mem.len() {
-            let (extract, elem) = self.mem.as_mut_slice().extract_mut(i);
-
-            if elem.core.is_alive() {
+            let alive =
+                match self.mem.get(i) {
+                    Some(ship) => ship.core.is_alive(),
+                    None => continue,
+                }
+            ;
+            if alive {
                 //(elem.think)(elem, &extract, bullet_system, &self.earth, dt);
                 self.ai_machine.think_for(
-                    elem,
-                    &extract,
+                    i,
+                    &mut self.mem,
                     bullet_system,
                     &self.earth,
                     dt,
@@ -498,12 +521,14 @@ impl Battlefield {
         }
     }
     
-    pub fn spawn(&mut self, ship : Ship) {
-        self.mem.push(ship);
+    pub fn spawn(&mut self, mut ship : Ship) {
+        ship.core.set_uid(self.uid_counter);
+        self.uid_counter += 1;
+        self.mem.insert(ship);
     }
 
     pub fn spawn_template(&mut self, id : usize) {
-        self.mem.push(self.template_table[id].prefab);
+        self.spawn(self.template_table[id].prefab);
     }
             
     pub fn fill_buffer(&self, buff : &mut VertexBuffer<SpriteData>) {
@@ -520,7 +545,7 @@ impl Battlefield {
         }
 
         let mut writer = SpriteDataWriter::new(ptr);
-        self.mem.iter().for_each(|x| (x.render)(x, &mut writer));
+        self.mem.iter().for_each(|(_, x)| (x.render)(x, &mut writer));
     }
 
     #[inline]
@@ -528,14 +553,17 @@ impl Battlefield {
     
     #[inline]
     pub fn get_mut(&mut self, id : usize) -> Option<&mut Ship> { self.mem.get_mut(id) }
+    
+    #[inline]
+    pub fn len(&self) -> usize { self.mem.len() }
 }
         
-use std::slice::IterMut;
+use slab::IterMut;
 use std::iter::Map;
 impl<'a> TargetSystem<'a> for Battlefield {
-    type Iter = Map<IterMut<'a, Ship>, fn(&mut Ship) -> &mut Core>;
+    type Iter = Map<IterMut<'a, Ship>, fn((usize, &mut Ship)) -> &mut Core>;
 
     fn entity_iterator(&'a mut self) -> Self::Iter {
-        self.mem.iter_mut().map(|x| &mut x.core)
+        self.mem.iter_mut().map(|(_, x)| &mut x.core)
     }
 }

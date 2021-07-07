@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::storage_traits::Battlefield;
 
+#[derive(Clone, Copy)]
 pub struct AttachmentInfo {
     pub parent_id : usize,
     pub parent_uid : u128,

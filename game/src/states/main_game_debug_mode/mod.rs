@@ -23,6 +23,7 @@ pub use cgmath::{ EuclideanSpace, InnerSpace, Point2, point2, vec2 };
 mod free_cam;
 mod ship_placement;
 mod ship_inspector;
+mod attachment_edit;
 
 #[derive(Debug)]
 pub struct DebugModeEntranceError;
@@ -89,6 +90,7 @@ impl StateData {
                             free_cam::FreeCam::new(&captured_state),
                             ship_placement::ShipPlacement::new(&captured_state),
                             ship_inspector::ShipInspector::new(&captured_state),
+                            attachment_edit::AttachmentEdit::new(&captured_state),
                         ],
                         state_id : 0,
                         captured_state,

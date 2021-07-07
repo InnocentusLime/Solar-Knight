@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use glium::VertexBuffer;
 
-use cgmath_ext::rotate_vector_oy;
+use crate::storage_traits::Battlefield;
+use cgmath_ext::{ rotate_vector_ox, rotate_vector_oy };
 use super::core::{ Core, Team };
 use sys_api::basic_graphics_data::SpriteData;
 use std_ext::{ collections::memory_chunk::MemoryChunk, duration_ext::* };
@@ -20,6 +21,8 @@ pub const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
 pub enum BulletKind {
     TestBullet,
     LaserBall,
+    SpinningLaser, // Maybe add damange cooldown
+    LaserBeam,
 //  HomingBullet(target),
 }
 
@@ -30,18 +33,24 @@ pub struct Bullet {
     kind : BulletKind,
     lifetime : Duration,
     team : Team,
+    parent : usize,
 }
 
 impl Bullet {
     pub fn size(&self) -> (f32, f32) {
+        use sys_api::graphics_init::SCREEN_WIDTH;
         match self.kind {
             BulletKind::TestBullet => (0.06f32, 0.09f32),
             BulletKind::LaserBall => (0.03f32, 0.03f32),
+            BulletKind::SpinningLaser { .. } | BulletKind::LaserBeam { .. } => (0.03f32, SCREEN_WIDTH / 1.5f32),
         }
     }
 
     #[inline]
     pub fn model_mat(&self) -> Matrix4<f32> {
+        use cgmath::One;
+        use sys_api::graphics_init::SCREEN_WIDTH;
+        
         let size = self.size();
 
         Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * 
@@ -50,7 +59,15 @@ impl Bullet {
             self.direction.x, self.direction.y, 0.0f32, 0.0f32,
             0.0f32, 0.0f32, 1.0f32, 0.0f32,
             0.0f32, 0.0f32, 0.0f32, 1.0f32,
-        ) * 
+        ) *
+        (
+            match self.kind {
+                BulletKind::SpinningLaser { .. } | BulletKind::LaserBeam { .. } => {
+                    Matrix4::from_translation(vec2(0.0f32, SCREEN_WIDTH / 1.5f32).extend(0.0f32))
+                },
+                _ => Matrix4::one(),
+            }
+        ) *
         Matrix4::from_nonuniform_scale(size.0, size.1, 1.0f32)
     }
 
@@ -76,6 +93,7 @@ impl Bullet {
             direction,
             kind : BulletKind::TestBullet,
             lifetime : Duration::from_secs(3),
+            parent : 0,
         }
     }
     
@@ -91,6 +109,39 @@ impl Bullet {
             direction,
             kind : BulletKind::LaserBall,
             lifetime : Duration::from_secs(3),
+            parent : 0,
+        }
+    }
+    
+    #[inline]
+    pub fn spinning_laser(
+        pos : Point2<f32>, 
+        direction : Vector2<f32>,
+        team : Team,
+    ) -> Bullet {
+        Bullet {
+            pos,
+            team,
+            direction,
+            kind : BulletKind::SpinningLaser,
+            lifetime : Duration::from_secs_f32(1.0f32),
+            parent : 0,
+        }
+    }
+    
+    #[inline]
+    pub fn laser_beam(
+        pos : Point2<f32>, 
+        direction : Vector2<f32>,
+        team : Team,
+    ) -> Bullet {
+        Bullet {
+            pos,
+            team,
+            direction,
+            kind : BulletKind::LaserBeam,
+            lifetime : Duration::from_secs(3),
+            parent : 0,
         }
     }
 }
@@ -159,12 +210,6 @@ impl Default for Gun {
     }
 }
 
-pub trait TargetSystem<'a> {
-    type Iter : Iterator<Item = &'a mut Core>;
-
-    fn entity_iterator(&'a mut self) -> Self::Iter;
-}
-
 pub struct BulletSystem {
     mem : MemoryChunk<Bullet>,
 }
@@ -176,15 +221,13 @@ impl BulletSystem {
         }
     }
 
-    pub fn spawn(&mut self, bullet : Bullet) {
+    pub fn spawn(&mut self, mut bullet : Bullet, parent : usize) {
+        bullet.parent = parent;
         self.mem.push(bullet);
     }
 
     // FIXME just iterating over all enemies probably sucks.
-    // TODO the interface to the hive (`I` must also have a way to random-access enemies)
-    pub fn update<I>(&mut self, c : &mut I, dt : Duration) 
-    where
-        for<'a> I : TargetSystem<'a>
+    pub fn update(&mut self, c : &mut Battlefield, dt : Duration) 
     {
         use collision::*;
         use std_ext::*;
@@ -209,7 +252,7 @@ impl BulletSystem {
                         let my_body = collision_models::consts::BulletTester.apply_transform(&bullet.transform());
                         let my_aabb = my_body.aabb();
 
-                        for target in c.entity_iterator() {                
+                        for target in c.iter_mut().map(|x| &mut x.core) {                
                             if bullet.lifetime.my_is_zero() { break }
 
                             let target_body = target.phys_body();
@@ -232,7 +275,7 @@ impl BulletSystem {
                         let my_body = collision_models::consts::LaserBall.apply_transform(&bullet.transform());
                         let my_aabb = my_body.aabb();
 
-                        for target in c.entity_iterator() {                
+                        for target in c.iter_mut().map(|x| &mut x.core) {                
                             if bullet.lifetime.my_is_zero() { break }
 
                             let target_body = target.phys_body();
@@ -248,7 +291,66 @@ impl BulletSystem {
                                 bullet.lifetime = <Duration as DurationExt>::my_zero();
                             } 
                         }
-                    },        
+                    },
+                    BulletKind::SpinningLaser => {
+                        let (parent_pos, parent_direction) = 
+                            c.get(bullet.parent)
+                            .map(|x| (x.core.pos, x.core.direction()))
+                            .unwrap()
+                        ;
+                        bullet.pos = parent_pos;
+                        let (sin, cos) = (std::f32::consts::TAU * dt.as_secs_f32()).sin_cos();
+                        bullet.direction = rotate_vector_ox(bullet.direction, vec2(cos, sin));
+                        
+                        let my_body = collision_models::consts::LaserBeam.apply_transform(&bullet.transform());
+                        let my_aabb = my_body.aabb();
+
+                        for target in c.iter_mut().map(|x| &mut x.core) {                
+                            if bullet.lifetime.my_is_zero() { break }
+
+                            let target_body = target.phys_body();
+                            let target_aabb = target_body.aabb();
+            
+                            if 
+                                target.team() != bullet.team &&
+                                target.hp() > 0 && 
+                                target_aabb.collision_test(my_aabb) && 
+                                target_body.check_collision(&my_body)
+                            {
+                                target.damage(1);
+                                //bullet.lifetime = <Duration as DurationExt>::my_zero();
+                            } 
+                        }
+                    },
+                    BulletKind::LaserBeam => {
+                        let (parent_pos, parent_direction) = 
+                            c.get(bullet.parent)
+                            .map(|x| (x.core.pos, x.core.direction()))
+                            .unwrap()
+                        ;
+                        bullet.pos = parent_pos;
+                        bullet.direction = parent_direction;
+                        
+                        let my_body = collision_models::consts::LaserBeam.apply_transform(&bullet.transform());
+                        let my_aabb = my_body.aabb();
+
+                        for target in c.iter_mut().map(|x| &mut x.core) {                
+                            if bullet.lifetime.my_is_zero() { break }
+
+                            let target_body = target.phys_body();
+                            let target_aabb = target_body.aabb();
+            
+                            if 
+                                target.team() != bullet.team &&
+                                target.hp() > 0 && 
+                                target_aabb.collision_test(my_aabb) && 
+                                target_body.check_collision(&my_body)
+                            {
+                                target.damage(1);
+                                //bullet.lifetime = <Duration as DurationExt>::my_zero();
+                            } 
+                        }
+                    },
                 }
             } 
         );
@@ -260,6 +362,16 @@ impl BulletSystem {
                 match bullet.kind {
                     BulletKind::TestBullet => !bullet.lifetime.my_is_zero(),
                     BulletKind::LaserBall => !bullet.lifetime.my_is_zero(),
+                    BulletKind::SpinningLaser => {
+                        //let player_pos = ;
+                        //bullet.pos = 
+                        !bullet.lifetime.my_is_zero()
+                    },
+                    BulletKind::LaserBeam => {
+                        //let player_pos = ;
+                        //bullet.pos = 
+                        !bullet.lifetime.my_is_zero()
+                    },
                 }
             }
         );

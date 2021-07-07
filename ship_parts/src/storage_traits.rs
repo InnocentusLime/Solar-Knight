@@ -4,7 +4,7 @@ use std::time::Duration;
 use crate::earth::Earth;
 use crate::core::{ Core, Team };
 use crate::engine::Engine;
-use crate::gun::{ BulletSystem, TargetSystem, Gun, Bullet };
+use crate::gun::{ BulletSystem, Gun, Bullet };
 
 use std_ext::ExtractResultMut;
 use sys_api::basic_graphics_data::SpriteData;
@@ -181,13 +181,14 @@ impl AiCommand {
                 gun,
                 next,
             } => {
+                let me_id = me;
                 let me = storage.get_mut(me).unwrap();
                 match me.guns.get_mut(gun) {
                     Some(gun) => {
                         gun.shoot(&me.core) 
                         .map_or(
                             (),
-                            |x| bullet_system.spawn(x)
+                            |x| bullet_system.spawn(x, me_id)
                         );
                         Ok(ExecutionControl::GoTo(next))
                     },
@@ -556,14 +557,9 @@ impl Battlefield {
     
     #[inline]
     pub fn len(&self) -> usize { self.mem.len() }
-}
-        
-use slab::IterMut;
-use std::iter::Map;
-impl<'a> TargetSystem<'a> for Battlefield {
-    type Iter = Map<IterMut<'a, Ship>, fn((usize, &mut Ship)) -> &mut Core>;
 
-    fn entity_iterator(&'a mut self) -> Self::Iter {
-        self.mem.iter_mut().map(|(_, x)| &mut x.core)
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Ship> {
+        self.mem.iter_mut().map(|(_, x)| x)
     }
 }

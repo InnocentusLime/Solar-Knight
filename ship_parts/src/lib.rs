@@ -39,11 +39,13 @@ mod ai {
         bullet_system : &mut crate::gun::BulletSystem,
         gun : usize,
     ) {
+        /*
         me.guns[0].shoot(&me.core) 
         .map_or(
             (),
             |x| bullet_system.spawn(x)
         )
+        */
     }
 
     pub fn can_see(

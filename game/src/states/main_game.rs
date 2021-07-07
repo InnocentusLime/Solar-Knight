@@ -202,7 +202,7 @@ impl StateData {
                     // Keep track of https://github.com/rust-lang/rfcs/issues/1215
                     let bullet_sys = &mut self.bullet_sys;
                     player.guns[0].shoot(&player.core)
-                    .map_or((), |x| bullet_sys.spawn(x));
+                    .map_or((), |x| bullet_sys.spawn(x, 0));
                 }
 
                 if input_tracker.is_mouse_button_down(MouseButton::Right) {

@@ -3,10 +3,9 @@ use std::collections::HashMap;
 use crate::storage_traits::Battlefield;
 
 pub struct AttachmentInfo {
-    parent_id : usize,
-    copy_hp : bool,
-    parent_uid : u128,
-    my_uid : u128,
+    pub parent_id : usize,
+    pub parent_uid : u128,
+    pub my_uid : u128,
     // offset : Vector2<f32>,
 }
 
@@ -36,17 +35,17 @@ impl AttachmentSystem {
         self.subscribers.iter()
         .for_each(
             |(id, attach)| {
-                let (parent_pos, parent_hp) = {
+                let parent_pos = {
                     let parent = battlefield.get(attach.parent_id).unwrap();
-                    (parent.core.pos, parent.core.hp())
+                    parent.core.pos
                 };
                 let ship = battlefield.get_mut(*id).unwrap();
                 ship.core.pos = parent_pos; // + offest.aware_of(parent_direction)
-
-                if attach.copy_hp {
-                    unsafe { *ship.core.hp_mut() = parent_hp; }
-                }
             }
         )
+    }
+
+    pub fn add_attachment(&mut self, id : usize, info : AttachmentInfo) {
+        self.subscribers.insert(id, info);
     }
 }

@@ -11,6 +11,7 @@ pub mod collision_models;
 pub mod constants;
 pub mod storage_traits;
 pub mod part_trait;
+pub mod attachment;
 
 pub use crate::core::Team;
 pub use crate::earth::Earth;

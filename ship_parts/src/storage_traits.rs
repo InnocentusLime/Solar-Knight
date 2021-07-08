@@ -17,16 +17,18 @@ use slab::Slab;
 use glium::VertexBuffer;
 use tinyvec::ArrayVec;
 use tinyvec::array_vec;
+use serde_derive::{ Serialize, Deserialize };
 use cgmath::{ Point2, Matrix4, EuclideanSpace, InnerSpace, vec2, abs_diff_ne, abs_diff_eq };
 
 pub static mut FRICTION_KOEFF : f32 = 0.5f32;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct RoutineId(pub usize);
-#[derive(Clone, Copy, Debug)]
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct CommandId(pub usize);
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Target {
     Earth,
     Ship(usize),
@@ -50,13 +52,13 @@ impl Target {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum ExecutionControl {
     GoTo(CommandId),
     Done(RoutineId),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum CommandError {
     TargetOutOfRange,
     TriedToTargetSelf,
@@ -66,7 +68,7 @@ pub enum CommandError {
 
 // Ai routine is a block of commands which decide ships new state and
 // then says which ai routine should be executed next frame
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum AiCommand {
     End(RoutineId),
     Noop {
@@ -245,6 +247,7 @@ pub enum RoutineError {
 // those decision systems should then
 // figure out which ai routine should
 // the ship (NPC) start to run
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AiRoutine {
     commands : Vec<AiCommand>,
 }
@@ -304,6 +307,7 @@ impl AiRoutine {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AiMachine {
     routines : Vec<AiRoutine>,
 }

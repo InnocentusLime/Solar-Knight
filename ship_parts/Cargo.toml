@@ -8,10 +8,12 @@ edition = "2018"
 
 [dependencies]
 lazy_static = "1.4.0"
-slab = "0.4.2"
+slab = { version = "0.4.3", features = ["serde"]}
 tinyvec = "1.2.0"
 cgmath = "0.18.0"
 glium = "0.29.0"
+serde = "1.0.123"
+serde_derive = "1.0.126"
 
 std_ext = { path = "../std_ext" }
 collision = { path = "../collision" }

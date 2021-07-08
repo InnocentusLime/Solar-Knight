@@ -11,6 +11,7 @@ use sys_api::basic_graphics_data::SpriteData;
 use sys_api::graphics_init::SpriteDataWriter;
 use crate::constants::VECTOR_NORMALIZATION_RANGE;
 use cgmath_ext::rotate_vector_ox;
+use crate::render::RenderInfo;
 use crate::collision_models::model_indices::*;
 
 use slab::Slab;
@@ -373,7 +374,8 @@ impl AiMachine {
 // a separate constant
 #[derive(Clone, Copy)]
 pub struct Ship {
-    pub render : fn(&Self, &mut SpriteDataWriter),
+    pub render : RenderInfo,
+    // TODO make it part of the new ai system
     pub think : Option<RoutineId>,
     pub core : Core,
     pub engines : ArrayVec<[Engine; 5]>,
@@ -398,7 +400,7 @@ impl Ship {
     pub fn new(
         core : Core, 
         think : Option<RoutineId>,
-        render : fn(&Self, &mut SpriteDataWriter),
+        render : RenderInfo,
         engines : ArrayVec<[Engine; 5]>,
         guns : ArrayVec<[Gun; 5]>,
     ) -> Self {
@@ -412,7 +414,6 @@ impl Ship {
     }
 }
 
-use crate::test_render;
 pub struct TemplateTableEntry {
     pub name : String,
     pub prefab : Ship,
@@ -429,7 +430,7 @@ impl TemplateTableEntry {
             prefab : Ship::new(
                 Core::new(3, 5.0f32, CollisionModelIndex::Player, Team::Earth),
                 None,
-                test_render,
+                RenderInfo {},
                 array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 5.0f32, 0)],
                 array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::tester_bullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32))],
             ),
@@ -442,7 +443,7 @@ impl TemplateTableEntry {
             prefab : Ship::new(
                 Core::new(3, 100.0f32, CollisionModelIndex::Player, Team::Hive),
                 Some(RoutineId(0)),
-                test_render,
+                RenderInfo {},
                 array_vec![],
                 array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), Bullet::laser_ball, Duration::from_millis(400), vec2(0.0f32, 1.0f32))],
             ),
@@ -539,18 +540,7 @@ impl Battlefield {
     pub fn fill_buffer(&self, buff : &mut VertexBuffer<SpriteData>) {
         use sys_api::graphics_init::{ ENEMY_LIMIT };
                 
-        let mut ptr = buff.map_write();
-
-        if ptr.len() < ENEMY_LIMIT { panic!("Buffer too small"); }
-
-        for i in 0..ptr.len() { 
-            use sys_api::basic_graphics_data::ZEROED_SPRITE_DATA;
-            
-            ptr.set(i, ZEROED_SPRITE_DATA);
-        }
-
-        let mut writer = SpriteDataWriter::new(ptr);
-        self.mem.iter().for_each(|(_, x)| (x.render)(x, &mut writer));
+        //self.mem.iter().for_each(|(_, x)| (x.render)(x, &mut writer));
     }
 
     #[inline]
@@ -561,6 +551,11 @@ impl Battlefield {
     
     #[inline]
     pub fn len(&self) -> usize { self.mem.len() }
+
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = &Ship> {
+        self.mem.iter().map(|(_, x)| x)
+    }
 
     #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Ship> {

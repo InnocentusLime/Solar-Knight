@@ -8,6 +8,7 @@ use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
 use glutin::event::{ MouseButton };
 
+use ship_parts::render::RenderSystem;
 use ship_parts::constants::VECTOR_NORMALIZATION_RANGE;
 use ship_parts::{ BulletSystem, Team, Battlefield };
 use ship_parts::attachment::AttachmentSystem;
@@ -57,7 +58,6 @@ fn load_environment_params() -> (f32, f32) {
 }
 
 pub struct StateData {
-    pub player_ship_texture : Texture2d,
     pub sun_texture : Texture2d,
     pub earth_texture : Texture2d,
     pub basic_enemy_ship_texture : Texture2d,
@@ -71,12 +71,12 @@ pub struct StateData {
     pointer_target : PointerTarget,
     bullet_sys : BulletSystem,
     pub attach_sys : AttachmentSystem,
+    pub render_sys : RenderSystem,
 }
 
 impl StateData {
     pub fn init(ctx : &mut GraphicsContext, _old : GameState) -> GameState {
         let sun_texture = texture_load_from_file(&ctx.display, "textures/sun.png").unwrap();
-        let player_ship_texture = texture_load_from_file(&ctx.display, "textures/player_ship.png").unwrap();
         let earth_texture = texture_load_from_file(&ctx.display, "textures/earth.png").unwrap();
         let basic_enemy_ship_texture = texture_load_from_file(&ctx.display, "textures/basic_enemy_ship.png").unwrap();
         let player_bullet_texture = texture_load_from_file(&ctx.display, "textures/player_bullet.png").unwrap();
@@ -89,7 +89,6 @@ impl StateData {
                 
         let mut me =
             StateData {
-                player_ship_texture,
                 sun_texture,
                 background_texture,
                 earth_texture,
@@ -101,6 +100,7 @@ impl StateData {
                 pointer_target : PointerTarget::None,
                 bullet_sys : BulletSystem::new(),
                 attach_sys : AttachmentSystem::new(),
+                render_sys : RenderSystem::new(ctx),
                 battlefield,
             }
         ;
@@ -236,7 +236,7 @@ impl StateData {
         None
     }
 
-    pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, _targets : &mut RenderTargets, _input_tracker : &InputTracker) {
+    pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, targets : &mut RenderTargets, _input_tracker : &InputTracker) {
         use glium::Surface;
         use cgmath::Matrix4;
 
@@ -288,9 +288,13 @@ impl StateData {
         self.bullet_sys.fill_buffer(&mut ctx.bullet_buffer);
         draw_instanced_sprite(ctx, frame, &ctx.bullet_buffer, vp, self.player_bullet_texture.sampled(), Some(ctx.viewport()));
 
-        ctx.enemy_buffer.invalidate();
-        self.battlefield.fill_buffer(&mut ctx.enemy_buffer);
-        draw_instanced_sprite(ctx, frame, &ctx.enemy_buffer, vp, self.player_ship_texture.sampled(), Some(ctx.viewport()));
+        self.render_sys
+        .render_ships(
+            frame,
+            ctx,
+            targets,
+            &self.battlefield
+        );
 
         let pointer_target = 
             match self.pointer_target {

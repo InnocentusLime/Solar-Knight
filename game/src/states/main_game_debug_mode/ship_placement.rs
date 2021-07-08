@@ -93,29 +93,9 @@ impl DebugState for ShipPlacement {
         input_tracker : &InputTracker,
         pointer_in_ui : bool,
     ) {
-        use sys_api::graphics_init::SpriteDataWriter;
-        use sys_api::graphics_utils::draw_instanced_sprite;
-        
-        let vp = ctx.build_projection_view_matrix();
-
-        ctx.sprite_debug_buffer.invalidate();
-
-        let () = {
-            //use sys_api::graphics_init::{ ENEMY_LIMIT };
-            let mut ptr = ctx.sprite_debug_buffer.map_write();
-            //if ptr.len() < ENEMY_LIMIT { panic!("Buffer too small"); }
-            for i in 0..ptr.len() { 
-                use sys_api::basic_graphics_data::ZEROED_SPRITE_DATA;            
-                ptr.set(i, ZEROED_SPRITE_DATA);
-            }
-
-            let mut writer = SpriteDataWriter::new(ptr);
-            (self.current_ship.render)(&self.current_ship, &mut writer);
-        };
-
         if self.placing && !pointer_in_ui {
             // render the to-place ship
-            draw_instanced_sprite(ctx, frame, &ctx.sprite_debug_buffer, vp, captured_state.player_ship_texture.sampled(), Some(ctx.viewport()));
+            captured_state.render_sys.render_ship_debug(frame, ctx, targets, &self.current_ship);
         }
     }
 }

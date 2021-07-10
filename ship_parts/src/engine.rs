@@ -1,8 +1,9 @@
 use cgmath_ext::rotate_vector_oy;
 use crate::constants::VECTOR_NORMALIZATION_RANGE;
 use cgmath::{ Vector2, InnerSpace, assert_abs_diff_eq, vec2 };
+use serde::{ Serialize, Deserialize };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Engine {
     direction : Vector2<f32>,
     max_lvl : u16,

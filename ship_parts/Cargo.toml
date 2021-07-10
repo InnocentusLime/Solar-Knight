@@ -9,11 +9,10 @@ edition = "2018"
 [dependencies]
 lazy_static = "1.4.0"
 slab = { version = "0.4.3", features = ["serde"]}
-tinyvec = "1.2.0"
-cgmath = "0.18.0"
+tinyvec = { version = "1.2.0", features = ["serde"]}
+cgmath = { version = "0.18.0", features = ["serde"]}
 glium = "0.29.0"
-serde = "1.0.123"
-serde_derive = "1.0.126"
+serde = { version = "1.0.123", features = ["derive"]}
 log = "*"
 image = "*"
 

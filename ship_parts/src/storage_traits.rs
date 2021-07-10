@@ -18,7 +18,7 @@ use slab::Slab;
 use glium::VertexBuffer;
 use tinyvec::ArrayVec;
 use tinyvec::array_vec;
-use serde_derive::{ Serialize, Deserialize };
+use serde::{ Serialize, Deserialize };
 use cgmath::{ Point2, Matrix4, EuclideanSpace, InnerSpace, vec2, abs_diff_ne, abs_diff_eq };
 
 pub static mut FRICTION_KOEFF : f32 = 0.5f32;

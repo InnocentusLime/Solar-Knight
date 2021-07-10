@@ -4,13 +4,13 @@ use crate::storage_traits::Ship;
 use sys_api::basic_graphics_data::SpriteData;
 use sys_api::graphics_init::SpriteDataWriter;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
+use crate::loaders::texture_load_from_file;
 
 use glium::Frame;
 use glium::texture::texture2d::Texture2d;
+use serde::{ Serialize, Deserialize };
 
-use crate::loaders::texture_load_from_file;
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct RenderInfo {
 
 }

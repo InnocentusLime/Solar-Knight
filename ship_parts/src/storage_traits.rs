@@ -119,6 +119,19 @@ impl TemplateTableEntry {
             ),
         }
     }
+    
+    pub fn fly_ship() -> Self {
+        TemplateTableEntry {
+            name : "Fly".to_owned(),
+            prefab : Ship::new(
+                Core::new(1, 1.5f32, CollisionModelIndex::Player, Team::Hive),
+                Some(RoutineId(2)),
+                RenderInfo {},
+                array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 2, 1.2f32, 0)],
+                array_vec![],
+            ),
+        }
+    }
 }
 
 pub struct Battlefield {
@@ -140,6 +153,7 @@ impl Battlefield {
                 TemplateTableEntry::player_ship(),
                 TemplateTableEntry::turret_ship(),
                 TemplateTableEntry::heavy_body(),
+                TemplateTableEntry::fly_ship(),
             ],
         }
     }
@@ -198,6 +212,9 @@ impl Battlefield {
     
     #[inline]
     pub fn len(&self) -> usize { self.mem.len() }
+    
+    #[inline]
+    pub fn capacity(&self) -> usize { self.mem.capacity() }
 
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &Ship> {

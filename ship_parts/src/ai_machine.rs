@@ -334,7 +334,61 @@ impl AiMachine {
                         },
                         AiCommand::End(RoutineId(1)),
                     ],
-                }
+                },
+                // Small "fly" AI setup
+                AiRoutine {
+                    commands : vec![
+                        AiCommand::IncreaseSpeed {
+                            engine : 0,
+                            next : CommandId(1),
+                        },
+                        AiCommand::End(RoutineId(3)),
+                    ],
+                },
+                // Small "fly" AI regular
+                AiRoutine {
+                    commands : vec![
+                        AiCommand::IsTargetClose {
+                            target : Target::Ship(0),
+                            distance : 0.8f32,
+                            on_success : CommandId(1),
+                            on_failure : CommandId(3),
+                        },
+                        AiCommand::RotateTowards {
+                            target : Target::Ship(0),
+                            angular_speed : std::f32::consts::TAU * 2.0f32,
+                            next : CommandId(2),
+                        },
+                        AiCommand::End(RoutineId(3)),
+                        AiCommand::IncreaseSpeed {
+                            engine : 0,
+                            next : CommandId(4),
+                        },
+                        AiCommand::End(RoutineId(4)),
+                    ],
+                },
+                // Small "fly" AI too far
+                AiRoutine {
+                    commands : vec![
+                        AiCommand::IsTargetClose {
+                            target : Target::Ship(0),
+                            distance : 0.8f32,
+                            on_success : CommandId(3),
+                            on_failure : CommandId(1),
+                        },
+                        AiCommand::RotateTowards {
+                            target : Target::Ship(0),
+                            angular_speed : std::f32::consts::TAU * 2.0f32,
+                            next : CommandId(2),
+                        },
+                        AiCommand::End(RoutineId(4)),
+                        AiCommand::DecreaseSpeed {
+                            engine : 0,
+                            next : CommandId(4),
+                        },
+                        AiCommand::End(RoutineId(3)),
+                    ],
+                },
             ],
         }
     }
@@ -364,7 +418,7 @@ impl AiMachine {
     pub fn update(&self, battlefield : &mut Battlefield, bullet_system : &mut BulletSystem, dt : Duration) {
         use std_ext::*;
 
-        for i in 0..battlefield.len() {
+        for i in 0..battlefield.capacity() {
             let alive =
                 match battlefield.get(i) {
                     Some(ship) => ship.core.is_alive(),

@@ -186,6 +186,7 @@ impl DebugState for ShipInspector {
                 ui.heading(format!("velocity : {}, {}", ship.core.velocity.x, ship.core.velocity.y));
                 ui.heading(format!("force : {}, {}", ship.core.force.x, ship.core.force.y));
                 ui.heading(format!("team : {:?}", ship.core.team()));
+                ui.heading(format!("ai_routine : {:?}", ship.think));
                                 
                 egui::Separator::default().horizontal().ui(ui);
 

@@ -103,6 +103,22 @@ impl TemplateTableEntry {
             ),
         }
     }
+
+    // TODO heavy body should be bigger
+    // and have different graphics
+    // TODO heavy should target earth in advance
+    pub fn heavy_body() -> Self {
+        TemplateTableEntry {
+            name : "Heavy's body".to_owned(),
+            prefab : Ship::new(
+                Core::new(10, 100.0f32, CollisionModelIndex::Player, Team::Hive),
+                Some(RoutineId(1)),
+                RenderInfo {},
+                array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 1.0f32, 0)],
+                array_vec![],
+            ),
+        }
+    }
 }
 
 pub struct Battlefield {
@@ -123,6 +139,7 @@ impl Battlefield {
             template_table : vec![
                 TemplateTableEntry::player_ship(),
                 TemplateTableEntry::turret_ship(),
+                TemplateTableEntry::heavy_body(),
             ],
         }
     }

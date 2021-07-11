@@ -155,7 +155,7 @@ impl AiCommand {
                 let dir_vec = (target - me.core.pos).normalize();
                 let ang = me.core.direction().angle(dir_vec);
 
-                if abs_diff_ne!(ang.0, 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
+                if ang.0.abs() > angular_speed * dt.as_secs_f32() {
                     let (c, s) =
                         if ang.0 > 0.0f32 {
                             ((angular_speed * dt.as_secs_f32()).cos(), (angular_speed * dt.as_secs_f32()).sin())
@@ -164,7 +164,7 @@ impl AiCommand {
                         } 
                     ;
                     me.core.set_direction(rotate_vector_ox(me.core.direction(), vec2(c, s)));
-                }
+                } else { me.core.set_direction(dir_vec); }
 
                 Ok(ExecutionControl::GoTo(next))
             },
@@ -293,6 +293,7 @@ impl AiMachine {
     pub fn new() -> Self {
         AiMachine {
             routines : vec![
+                // Turret AI
                 AiRoutine {
                     commands : vec![
                         AiCommand::IsTargetClose {
@@ -318,6 +319,21 @@ impl AiMachine {
                         },
                         AiCommand::End(RoutineId(0)),
                     ], 
+                },
+                // Heavy-body AI
+                AiRoutine {
+                    commands : vec![
+                        AiCommand::RotateTowards {
+                            target : Target::Earth,
+                            angular_speed : std::f32::consts::TAU / 16.0f32,
+                            next : CommandId(1),
+                        },
+                        AiCommand::IncreaseSpeed {
+                            engine : 0,
+                            next : CommandId(2),
+                        },
+                        AiCommand::End(RoutineId(1)),
+                    ],
                 }
             ],
         }

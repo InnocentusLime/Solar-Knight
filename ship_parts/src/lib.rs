@@ -14,11 +14,12 @@ pub mod storage_traits;
 pub mod part_trait;
 pub mod attachment;
 pub mod loaders;
+pub mod ai_machine;
 
 pub use crate::core::Team;
 pub use crate::earth::Earth;
 pub use crate::gun::BulletSystem;
-pub use crate::storage_traits::{ Ship, Battlefield, RoutineId };       
+pub use crate::storage_traits::{ Ship, Battlefield };       
 
 use std::time::Duration;
 

@@ -8,6 +8,7 @@ use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
 use glutin::event::{ MouseButton };
 
+use ship_parts::ai_machine::AiMachine;
 use ship_parts::render::RenderSystem;
 use ship_parts::constants::VECTOR_NORMALIZATION_RANGE;
 use ship_parts::{ BulletSystem, Team, Battlefield };
@@ -72,6 +73,7 @@ pub struct StateData {
     bullet_sys : BulletSystem,
     pub attach_sys : AttachmentSystem,
     pub render_sys : RenderSystem,
+    pub ai_machine : AiMachine,
 }
 
 impl StateData {
@@ -101,6 +103,7 @@ impl StateData {
                 bullet_sys : BulletSystem::new(),
                 attach_sys : AttachmentSystem::new(),
                 render_sys : RenderSystem::new(ctx),
+                ai_machine : AiMachine::new(),
                 battlefield,
             }
         ;
@@ -197,14 +200,6 @@ impl StateData {
                     player.core.set_direction(mouse_pos.normalize());
                 }
         
-                if input_tracker.is_mouse_button_down(MouseButton::Left) {
-                    // Closures still haven't got smarter :(
-                    // Keep track of https://github.com/rust-lang/rfcs/issues/1215
-                    let bullet_sys = &mut self.bullet_sys;
-                    player.guns[0].shoot(&player.core)
-                    .map_or((), |x| bullet_sys.spawn(x, 0));
-                }
-
                 if input_tracker.is_mouse_button_down(MouseButton::Right) {
                     player.engines[0].increase_speed()
                 } else {
@@ -213,11 +208,16 @@ impl StateData {
             },
             _ => (),
         }
+                
+        if input_tracker.is_mouse_button_down(MouseButton::Left) {
+            self.bullet_sys.shoot_from_gun(&mut self.battlefield, 0, 0);
+        }
+
 
         self.battlefield.update(dt);
         self.bullet_sys.update(&mut self.battlefield, dt);
         self.attach_sys.update(&mut self.battlefield);
-        self.battlefield.think(&mut self.bullet_sys, dt);
+        self.ai_machine.update(&mut self.battlefield, &mut self.bullet_sys, dt);
        
         if let Some(player) = self.battlefield.get(0) {
             ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);

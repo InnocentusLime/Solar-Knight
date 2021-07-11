@@ -28,12 +28,12 @@ pub enum BulletKind {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Bullet {
-    pos : Point2<f32>,
-    direction : Vector2<f32>,
-    kind : BulletKind,
-    lifetime : Duration,
-    team : Team,
-    parent : usize,
+    pub pos : Point2<f32>,
+    pub direction : Vector2<f32>,
+    pub kind : BulletKind,
+    pub lifetime : Duration,
+    pub team : Team,
+    pub parent : usize,
 }
 
 impl Bullet {
@@ -80,76 +80,12 @@ impl Bullet {
             0.0f32, 0.0f32, 1.0f32,
         )
     }
-
-    #[inline]
-    pub fn tester_bullet(
-        pos : Point2<f32>, 
-        direction : Vector2<f32>,
-        team : Team,
-    ) -> Bullet {
-        Bullet {
-            pos,
-            team,
-            direction,
-            kind : BulletKind::TestBullet,
-            lifetime : Duration::from_secs(3),
-            parent : 0,
-        }
-    }
-    
-    #[inline]
-    pub fn laser_ball(
-        pos : Point2<f32>, 
-        direction : Vector2<f32>,
-        team : Team,
-    ) -> Bullet {
-        Bullet {
-            pos,
-            team,
-            direction,
-            kind : BulletKind::LaserBall,
-            lifetime : Duration::from_secs(3),
-            parent : 0,
-        }
-    }
-    
-    #[inline]
-    pub fn spinning_laser(
-        pos : Point2<f32>, 
-        direction : Vector2<f32>,
-        team : Team,
-    ) -> Bullet {
-        Bullet {
-            pos,
-            team,
-            direction,
-            kind : BulletKind::SpinningLaser,
-            lifetime : Duration::from_secs_f32(1.0f32),
-            parent : 0,
-        }
-    }
-    
-    #[inline]
-    pub fn laser_beam(
-        pos : Point2<f32>, 
-        direction : Vector2<f32>,
-        team : Team,
-    ) -> Bullet {
-        Bullet {
-            pos,
-            team,
-            direction,
-            kind : BulletKind::LaserBeam,
-            lifetime : Duration::from_secs(3),
-            parent : 0,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Gun {
     offset : Vector2<f32>,
-    bullet_maker : fn(Point2<f32>, Vector2<f32>, Team) -> Bullet,
+    bullet_kind : BulletKind,
     recoil : Duration,
     timer : Duration,
     direction : Vector2<f32>,
@@ -158,7 +94,7 @@ pub struct Gun {
 impl Gun {
     pub fn new(
         offset : Vector2<f32>,
-        bullet_maker : fn(Point2<f32>, Vector2<f32>, Team) -> Bullet,
+        bullet_kind : BulletKind,
         recoil : Duration,
         direction : Vector2<f32>,
     ) -> Self {
@@ -166,11 +102,16 @@ impl Gun {
 
         Gun {
             offset,
-            bullet_maker,
+            bullet_kind,
             recoil,
             timer : <Duration as DurationExt>::my_zero(),
             direction,
         }
+    }
+
+    #[inline]
+    pub fn kind(&self) -> BulletKind {
+        self.bullet_kind
     }
             
     #[inline]
@@ -178,20 +119,10 @@ impl Gun {
         self.timer.my_is_zero()
     }
             
-    pub fn shoot(&mut self, owner : &crate::core::Core) -> Option<crate::gun::Bullet> {
+    pub fn shoot(&mut self) {
         if self.can_shoot() {
             self.timer = self.recoil;
-            let off = rotate_vector_oy(owner.direction(), self.offset);
-            let bullet_dir = rotate_vector_oy(owner.direction(), self.direction);
-
-            Some(
-                (self.bullet_maker)(
-                    owner.pos + off,
-                    bullet_dir,
-                    owner.team(),
-                )
-            )
-        } else { None }
+        }
     }
             
     pub fn update(&mut self, _core : &mut crate::core::Core, dt : std::time::Duration) {
@@ -203,7 +134,7 @@ impl Default for Gun {
     fn default() -> Gun {
         Gun::new(
             vec2(0.0f32, 0.0f32),
-            Bullet::tester_bullet,
+            BulletKind::TestBullet,
             <Duration as DurationExt>::my_zero(),
             vec2(0.0f32, 1.0f32)
         )
@@ -221,9 +152,77 @@ impl BulletSystem {
         }
     }
 
-    pub fn spawn(&mut self, mut bullet : Bullet, parent : usize) {
-        bullet.parent = parent;
+    pub fn spawn(&mut self, mut bullet : Bullet) {
         self.mem.push(bullet);
+    }
+
+    // TODO return an error code
+    pub fn shoot_from_gun(
+        &mut self,
+        battlefield : &mut Battlefield,
+        parent : usize,
+        gun : usize,
+    ) {
+        let ship = battlefield.get_mut(parent).unwrap();
+        let gun = ship.guns.get_mut(gun).unwrap();
+
+        let off = rotate_vector_oy(ship.core.direction(), gun.offset);
+        let bullet_dir = rotate_vector_oy(ship.core.direction(), gun.direction);
+
+        if !gun.can_shoot() { return; }
+
+        gun.shoot();
+
+        match gun.kind() {
+            BulletKind::TestBullet => {
+                self.spawn(        
+                    Bullet {
+                        pos : ship.core.pos + off,
+                        team : ship.core.team(),
+                        direction : ship.core.direction(),
+                        kind : gun.kind(),
+                        lifetime : Duration::from_secs(3),
+                        parent,
+                    }
+                )
+            },
+            BulletKind::LaserBall => {
+                self.spawn(        
+                    Bullet {
+                        pos : ship.core.pos + off,
+                        team : ship.core.team(),
+                        direction : ship.core.direction(),
+                        kind : gun.kind(),
+                        lifetime : Duration::from_secs(3),
+                        parent,
+                    }
+                )
+            },
+            BulletKind::SpinningLaser => {
+                self.spawn(        
+                    Bullet {
+                        pos : ship.core.pos + off,
+                        team : ship.core.team(),
+                        direction : ship.core.direction(),
+                        kind : gun.kind(),
+                        lifetime : Duration::from_secs(1),
+                        parent,
+                    }
+                )
+            },
+            BulletKind::LaserBeam => {
+                self.spawn(        
+                    Bullet {
+                        pos : ship.core.pos + off,
+                        team : ship.core.team(),
+                        direction : ship.core.direction(),
+                        kind : gun.kind(),
+                        lifetime : Duration::from_secs(3),
+                        parent,
+                    }
+                )
+            },
+        }
     }
 
     // FIXME just iterating over all enemies probably sucks.

@@ -1,2 +1,2 @@
 [workspace]
-members = ["collision", "ship_parts", "std_ext", "sys_api", "game_bootstrap", "text_render"]
+members = ["collision", "ship_parts", "std_ext", "sys_api", "game_bootstrap", "text_render", "pack"]

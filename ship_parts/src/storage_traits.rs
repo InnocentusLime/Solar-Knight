@@ -84,7 +84,7 @@ impl TemplateTableEntry {
             prefab : Ship::new(
                 Core::new(3, 5.0f32, CollisionModelIndex::Player, Team::Earth),
                 None,
-                RenderInfo {},
+                RenderInfo { enemy_base_texture : false },
                 array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 5.0f32, 0)],
                 array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), BulletKind::TestBullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32))],
             ),
@@ -97,7 +97,7 @@ impl TemplateTableEntry {
             prefab : Ship::new(
                 Core::new(3, 100.0f32, CollisionModelIndex::Player, Team::Hive),
                 Some(RoutineId(0)),
-                RenderInfo {},
+                RenderInfo { enemy_base_texture : false },
                 array_vec![],
                 array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), BulletKind::LaserBall, Duration::from_millis(400), vec2(0.0f32, 1.0f32))],
             ),
@@ -113,7 +113,7 @@ impl TemplateTableEntry {
             prefab : Ship::new(
                 Core::new(10, 100.0f32, CollisionModelIndex::Player, Team::Hive),
                 Some(RoutineId(1)),
-                RenderInfo {},
+                RenderInfo { enemy_base_texture : true },
                 array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 1.0f32, 0)],
                 array_vec![],
             ),
@@ -126,7 +126,7 @@ impl TemplateTableEntry {
             prefab : Ship::new(
                 Core::new(1, 1.5f32, CollisionModelIndex::Player, Team::Hive),
                 Some(RoutineId(2)),
-                RenderInfo {},
+                RenderInfo { enemy_base_texture : false },
                 array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 2, 1.2f32, 0)],
                 array_vec![],
             ),

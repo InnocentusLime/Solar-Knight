@@ -77,7 +77,7 @@ impl<T : Copy> MultiDim<T> {
 // TODO make `WIDTH_CAP` an argument
 // TODO make the impl look cleaner
 // TODO replace some panics with error codes
-pub fn pack<T : Copy + Default>(mut glyphs : Vec<(String, Image<T>)>) -> Atlas<T> {
+pub fn pack<T : Copy>(mut glyphs : Vec<(String, Image<T>)>, filler : T) -> Atlas<T> {
     // TODO can be changed to max width of the glyph, I guess...
     const WIDTH_CAP : usize = 512;
 
@@ -98,7 +98,7 @@ pub fn pack<T : Copy + Default>(mut glyphs : Vec<(String, Image<T>)>) -> Atlas<T
             .any(
                 |ty : usize| {
                     if ty + img_height > dest.height() {
-                        dest.resize(WIDTH_CAP, ty + img_height, T::default());
+                        dest.resize(WIDTH_CAP, ty + img_height, filler);
                         mask.resize(WIDTH_CAP, ty + img_height, false);
                     }
 
@@ -161,7 +161,7 @@ pub fn pack<T : Copy + Default>(mut glyphs : Vec<(String, Image<T>)>) -> Atlas<T
 // Uv coordinates of an image.
 // The coordinate system encoded by this
 // struct is OpenGL-like
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct UvCoordTableEntry {
     pub left : f32,
     pub bottom : f32,
@@ -175,6 +175,7 @@ pub struct UvCoordTable {
 
 impl UvCoordTable {
     pub fn create<T>(atlas : Atlas<T>) -> Self {
+        let (atlas_width, atlas_height) = (atlas.width, atlas.height);
         UvCoordTable {
             entries : 
             atlas.img_data.into_iter()
@@ -182,10 +183,10 @@ impl UvCoordTable {
                 (
                     name, 
                     UvCoordTableEntry {
-                        left : (entry.off_x as f32) / ((entry.width - 1) as f32),
-                        bottom : ((entry.height - entry.off_y - 1) as f32) / ((entry.height - 1) as f32),
-                        right : ((entry.width - entry.off_x - 1) as f32) / ((entry.width - 1) as f32),
-                        top : (entry.off_y as f32) / ((entry.height - 1) as f32),
+                        left : entry.off_x as f32 / (atlas_width - 1) as f32,
+                        top : (atlas_height - entry.off_y - 1) as f32 / (atlas_height - 1) as f32,
+                        right : (entry.off_x + entry.width - 1) as f32 / (atlas_width - 1) as f32,
+                        bottom : (atlas_height - entry.off_y - 1 + entry.height - 1) as f32 / (atlas_height - 1) as f32,
                     }
                 )
             }).collect()

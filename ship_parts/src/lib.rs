@@ -13,7 +13,6 @@ pub mod constants;
 pub mod storage_traits;
 pub mod part_trait;
 pub mod attachment;
-pub mod loaders;
 pub mod ai_machine;
 
 pub use crate::core::Team;

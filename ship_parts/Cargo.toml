@@ -20,3 +20,5 @@ std_ext = { path = "../std_ext" }
 collision = { path = "../collision" }
 sys_api = { path = "../sys_api" }
 cgmath_ext = { path = "../cgmath_ext" }
+loaders = { path = "../loaders" }
+pack = { path = "../pack" }

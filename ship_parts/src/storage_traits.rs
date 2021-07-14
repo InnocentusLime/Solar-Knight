@@ -14,6 +14,7 @@ use cgmath_ext::rotate_vector_ox;
 use crate::render::RenderInfo;
 use crate::collision_models::model_indices::*;
 use crate::ai_machine::*;
+use crate::square_map::SquareMapNode;
 
 use slab::Slab;
 use glium::VertexBuffer;
@@ -34,6 +35,7 @@ pub struct Ship {
     pub core : Core,
     pub engines : ArrayVec<[Engine; 5]>,
     pub guns : ArrayVec<[Gun; 5]>,
+    pub square_map_node : SquareMapNode,
 }
 
 impl Ship {
@@ -64,6 +66,7 @@ impl Ship {
             core,
             engines,
             guns,
+            square_map_node : SquareMapNode::new(),
         }
     }
 }
@@ -223,6 +226,11 @@ impl Battlefield {
 
     #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Ship> {
-        self.mem.iter_mut().map(|(_, x)| x)
+        self.iter_mut_indices().map(|(_, x)| x)
+    }
+
+    #[inline]
+    pub fn iter_mut_indices(&mut self) -> impl Iterator<Item = (usize, &mut Ship)> {
+        self.mem.iter_mut()
     }
 }

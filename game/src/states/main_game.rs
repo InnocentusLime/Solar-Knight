@@ -8,6 +8,7 @@ use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
 use glutin::event::{ MouseButton };
 
+use ship_aprts::square_map::SquareMap;
 use ship_parts::ai_machine::AiMachine;
 use ship_parts::render::RenderSystem;
 use ship_parts::constants::VECTOR_NORMALIZATION_RANGE;
@@ -74,6 +75,7 @@ pub struct StateData {
     pub attach_sys : AttachmentSystem,
     pub render_sys : RenderSystem,
     pub ai_machine : AiMachine,
+    pub square_map : SquareMap,
 }
 
 impl StateData {
@@ -104,6 +106,7 @@ impl StateData {
                 attach_sys : AttachmentSystem::new(),
                 render_sys : RenderSystem::new(ctx),
                 ai_machine : AiMachine::new(),
+                square_map : SquareMap::new(),
                 battlefield,
             }
         ;

@@ -14,6 +14,7 @@ pub mod storage_traits;
 pub mod part_trait;
 pub mod attachment;
 pub mod ai_machine;
+pub mod square_map;
 
 pub use crate::core::Team;
 pub use crate::earth::Earth;

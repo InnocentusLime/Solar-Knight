@@ -52,11 +52,13 @@ pub struct StateData {
     pub player_bullet_texture : Texture2d,
     //player_dash_trace_texture : Texture2d,
 
-    pub storage : Storage,
 
     timer : Duration,
     pointer_target : PointerTarget,
-    bullet_sys : BulletSystem,
+    use_laser : bool,
+
+    pub storage : Storage,
+    pub bullet_sys : BulletSystem,
     pub attach_sys : AttachmentSystem,
     pub render_sys : RenderSystem,
     pub ai_machine : AiMachine,
@@ -92,6 +94,8 @@ impl StateData {
 
                 timer : SPAWN_RATE,
                 earth : Earth::new(),
+                use_laser : false,
+
                 pointer_target : PointerTarget::None,
                 bullet_sys : BulletSystem::new(),
                 attach_sys : AttachmentSystem::new(),
@@ -126,12 +130,17 @@ impl StateData {
                     }
                 }
 
+                let use_laser = &mut self.use_laser; 
                 let pointer_target = &mut self.pointer_target;
                 self.storage.unlock_mutations(&mut self.square_map)
                 .mutate(0,
                     |player| {
                         if player.core.is_alive() {
                             match virtual_keycode {
+                                Some(event::VirtualKeyCode::E) => {
+                                    *use_laser = !*use_laser;
+                                    player.guns.swap(0, 1);
+                                },
                                 Some(event::VirtualKeyCode::Key1) => *pointer_target = PointerTarget::None,
                                 Some(event::VirtualKeyCode::Key2) => *pointer_target = PointerTarget::Sun,
                                 Some(event::VirtualKeyCode::Key3) => *pointer_target = PointerTarget::Earth,
@@ -154,6 +163,8 @@ impl StateData {
         dt : Duration,
         _egui : &mut EguiGlium,
     ) -> Option<TransitionRequest> {
+        use glutin::event::{ VirtualKeyCode as Key };
+
         if let Some(player) = self.storage.get(0) {
             assert!(player.core.team() == Team::Earth);
             if !player.core.is_alive() { 
@@ -204,6 +215,14 @@ impl StateData {
                 &mut mutation_lock, 
                 0, 
                 0
+            );
+        }
+
+        if input_tracker.is_key_down(Key::Q) && self.use_laser {
+            self.bullet_sys.shoot_from_gun(
+                &mut mutation_lock, 
+                0, 
+                2
             );
         }
 

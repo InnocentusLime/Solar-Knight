@@ -87,7 +87,11 @@ impl TemplateTableEntry {
                 None,
                 RenderInfo { enemy_base_texture : false },
                 array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 5.0f32, 0)],
-                array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), BulletKind::TestBullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32))],
+                array_vec![_ => 
+                    Gun::new(vec2(0.0f32, 0.0f32), BulletKind::TestBullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32)),
+                    Gun::new(vec2(0.0f32, 0.0f32), BulletKind::LaserBeam, Duration::from_secs(4), vec2(0.0f32, 1.0f32)),
+                    Gun::new(vec2(0.0f32, 0.0f32), BulletKind::SpinningLaser, Duration::from_secs(2), vec2(0.0f32, 1.0f32)),
+                ],
             ),
         }
     }

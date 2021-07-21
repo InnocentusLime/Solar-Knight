@@ -38,6 +38,14 @@ impl Engine {
     pub fn decrease_speed(&mut self) {
         self.current_lvl = self.current_lvl.saturating_sub(1); 
     }
+
+    #[inline]
+    pub fn level(&self) -> u16 { self.current_lvl }
+
+    #[inline]
+    pub fn set_level(&mut self, level : u16) {
+        self.current_lvl = level.min(self.max_lvl);
+    }
     
     #[inline]
     pub fn update(&mut self, core : &mut crate::core::Core, _dt : std::time::Duration) {

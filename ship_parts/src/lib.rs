@@ -15,25 +15,24 @@ pub mod part_trait;
 pub mod attachment;
 pub mod ai_machine;
 pub mod square_map;
+pub mod physics;
+pub mod storage;
 
 pub use crate::core::Team;
 pub use crate::earth::Earth;
-pub use crate::gun::BulletSystem;
-pub use crate::storage_traits::{ Ship, Battlefield };       
+pub use crate::gun::{ BulletSystem };
+pub use crate::storage::{ Ship, Storage, MutableStorage };
+pub use crate::storage_traits::*;
 
-use std::time::Duration;
-
-use lazy_static::lazy_static;
-use cgmath::{ Vector2, Point2, InnerSpace, vec2, abs_diff_ne, abs_diff_eq };
-
-use crate::core::Core;
-use crate::engine::Engine;
-use crate::gun::{ Gun, Bullet };
-use crate::part_trait::ShipPart;
-use crate::constants::VECTOR_NORMALIZATION_RANGE;
-
-use cgmath_ext::rotate_vector_ox;
-
-use sys_api::basic_graphics_data::SpriteData;
-use sys_api::graphics_init::SpriteDataWriter;
-
+crate::declare_observers! {
+    spawning_observers : {
+        square_map : crate::square_map::SquareMap,
+    },
+    deletion_observers : {
+        square_map : crate::square_map::SquareMap,
+        attach_sys : crate::attachment::AttachmentSystem,
+    },
+    mutation_observers : {
+        square_map : crate::square_map::SquareMap,
+    },
+}

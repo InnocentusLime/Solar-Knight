@@ -8,11 +8,13 @@ use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
 use glutin::event::{ MouseButton };
 
-use ship_aprts::square_map::SquareMap;
+use ship_parts::earth::Earth;
+use ship_parts::physics::PhysicsSystem;
+use ship_parts::square_map::SquareMap;
 use ship_parts::ai_machine::AiMachine;
 use ship_parts::render::RenderSystem;
 use ship_parts::constants::VECTOR_NORMALIZATION_RANGE;
-use ship_parts::{ BulletSystem, Team, Battlefield };
+use ship_parts::{ BulletSystem, Team, Storage };
 use ship_parts::attachment::AttachmentSystem;
 use super::{ GameState, TransitionRequest, main_menu, main_game_debug_mode };
 use std_ext::*;
@@ -42,23 +44,6 @@ pub fn point_at(from : Point2<f32>, at : Point2<f32>) -> Option<Point2<f32>> {
     else { Some(<Point2<f32> as EuclideanSpace>::from_vec(pointer_v)) }
 }
 
-fn load_environment_params() -> (f32, f32) {
-    use std::fs::File;
-    use std::io::{ BufReader, BufRead };
-
-    let f = File::open("params.txt").expect("Params file not found");
-    let mut f = BufReader::new(f);
-
-    let mut line = String::new();
-    f.read_line(&mut line).expect("Failed to read friction expression");
-    let friction = line.trim().parse().expect("Failed to parse player mass expression");
-    line.clear();
-    f.read_line(&mut line).expect("Failed to read player mass expression");
-    let mass = line.trim().parse().expect("Failed to parse player mass expression");
-
-    (friction, mass)
-}
-
 pub struct StateData {
     pub sun_texture : Texture2d,
     pub earth_texture : Texture2d,
@@ -67,7 +52,7 @@ pub struct StateData {
     pub player_bullet_texture : Texture2d,
     //player_dash_trace_texture : Texture2d,
 
-    pub battlefield : Battlefield,
+    pub storage : Storage,
 
     timer : Duration,
     pointer_target : PointerTarget,
@@ -76,6 +61,8 @@ pub struct StateData {
     pub render_sys : RenderSystem,
     pub ai_machine : AiMachine,
     pub square_map : SquareMap,
+    pub phys_sys : PhysicsSystem,
+    pub earth : Earth,
 }
 
 impl StateData {
@@ -87,9 +74,12 @@ impl StateData {
         //let player_dash_trace_texture = texture_load_from_file(&ctx.display, "textures/player_dash_trace.png").unwrap();
         let background_texture = texture_load_from_file(&ctx.display, "textures/background_game.png").unwrap();
 
-        let mut battlefield = Battlefield::new();
+        let mut storage = Storage::new();
 
-        battlefield.spawn_template(0);
+        let mut square_map = SquareMap::new();
+        storage
+        .unlock_spawning(&mut square_map)
+        .spawn_template(0);
                 
         let mut me =
             StateData {
@@ -101,31 +91,18 @@ impl StateData {
                 //player_dash_trace_texture,
 
                 timer : SPAWN_RATE,
+                earth : Earth::new(),
                 pointer_target : PointerTarget::None,
                 bullet_sys : BulletSystem::new(),
                 attach_sys : AttachmentSystem::new(),
                 render_sys : RenderSystem::new(ctx),
                 ai_machine : AiMachine::new(),
-                square_map : SquareMap::new(),
-                battlefield,
+                square_map,
+                phys_sys : PhysicsSystem::new(),
+                storage,
             }
         ;
-        me.load_params();
         GameState::MainGame(me)
-    }
-
-    fn load_params(&mut self) {
-        use ship_parts::storage_traits::FRICTION_KOEFF;
-
-        let (friction, player_mass) = load_environment_params();
-
-        /*
-        unsafe { FRICTION_KOEFF = friction; }
-        match self.battlefield.get_mut_downcasted::<PlayerShip>(0) {
-            Some(player) => player.core.mass = player_mass,
-            _ => (),
-        }
-        */
     }
 
     pub fn process_event(&mut self, _ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<()>) -> Option<TransitionRequest> { 
@@ -143,21 +120,26 @@ impl StateData {
                 ),
                 ..
             } => {
-                match self.battlefield.get_mut(0) {
-                    Some(player) if player.core.is_alive() => {
-                        match virtual_keycode {
-                            Some(event::VirtualKeyCode::U) => self.load_params(),
-                            Some(event::VirtualKeyCode::Key1) => self.pointer_target = PointerTarget::None,
-                            Some(event::VirtualKeyCode::Key2) => self.pointer_target = PointerTarget::Sun,
-                            Some(event::VirtualKeyCode::Key3) => self.pointer_target = PointerTarget::Earth,
-                            Some(event::VirtualKeyCode::D) if input_tracker.is_key_down(event::VirtualKeyCode::LControl) => 
-                                return Some(Box::new(main_game_debug_mode::StateData::init))
-                            ,
-                            _ => (),
-                        }
-                    },
-                    _ => (),
+                if let virtual_keycode = Some(event::VirtualKeyCode::D) { 
+                    if input_tracker.is_key_down(event::VirtualKeyCode::LControl) {
+                        return Some(Box::new(main_game_debug_mode::StateData::init));
+                    }
                 }
+
+                let pointer_target = &mut self.pointer_target;
+                self.storage.unlock_mutations(&mut self.square_map)
+                .mutate(0,
+                    |player| {
+                        if player.core.is_alive() {
+                            match virtual_keycode {
+                                Some(event::VirtualKeyCode::Key1) => *pointer_target = PointerTarget::None,
+                                Some(event::VirtualKeyCode::Key2) => *pointer_target = PointerTarget::Sun,
+                                Some(event::VirtualKeyCode::Key3) => *pointer_target = PointerTarget::Earth,
+                                _ => (),
+                            }
+                        }
+                    }
+                );
             },
             _ => (),
         }
@@ -172,7 +154,7 @@ impl StateData {
         dt : Duration,
         _egui : &mut EguiGlium,
     ) -> Option<TransitionRequest> {
-        if let Some(player) = self.battlefield.get(0) {
+        if let Some(player) = self.storage.get(0) {
             assert!(player.core.team() == Team::Earth);
             if !player.core.is_alive() { 
                 println!("You have died!");
@@ -196,8 +178,14 @@ impl StateData {
             self.timer = self.timer.my_saturating_sub(dt);
         }
 
-        match self.battlefield.get_mut(0) {
-            Some(player) if player.core.is_alive() => {
+        let mut deletion_lock = self.storage.unlock_deletion(&mut self.square_map, &mut self.attach_sys);
+        deletion_lock.filter(|x| x.core.team() != Team::Earth && x.core.hp() == 0);
+
+        let mut mutation_lock = self.storage.unlock_mutations(&mut self.square_map);
+
+        mutation_lock
+        .mutate(0, |player| {
+            if player.core.is_alive() {
                 let mouse_pos = input_tracker.mouse_position();
                 if abs_diff_ne!(mouse_pos.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
                     player.core.set_direction(mouse_pos.normalize());
@@ -208,34 +196,27 @@ impl StateData {
                 } else {
                     player.engines[0].decrease_speed()
                 }
-            },
-            _ => (),
-        }
+            }
+        });
                 
         if input_tracker.is_mouse_button_down(MouseButton::Left) {
-            self.bullet_sys.shoot_from_gun(&mut self.battlefield, 0, 0);
+            self.bullet_sys.shoot_from_gun(
+                &mut mutation_lock, 
+                0, 
+                0
+            );
         }
 
-
-        self.battlefield.update(dt);
-        self.bullet_sys.update(&mut self.battlefield, dt);
-        self.attach_sys.update(&mut self.battlefield);
-        self.ai_machine.update(&mut self.battlefield, &mut self.bullet_sys, dt);
+        self.earth.update(dt);
+        self.phys_sys.update(&mut mutation_lock, dt);
+        self.bullet_sys.update(&mut mutation_lock, dt);
+        self.attach_sys.update(&mut mutation_lock);
+        self.ai_machine.update(&mut mutation_lock, &self.earth, &mut self.bullet_sys, dt);
        
-        if let Some(player) = self.battlefield.get(0) {
+        if let Some(player) = self.storage.get(0) {
             ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);
         } else { panic!("No player!!"); }
          
-        /*
-        let sun_box = mesh_of_sprite(Matrix4::one(), vec2(0.4f32, 0.4f32));
-        let player_box = 
-            mesh_of_sprite(
-                Matrix4::from_translation(self.player_position.extend(0.0f32)) * Matrix4::from_angle_z(self.player_rotation),
-                vec2(0.1f32, 0.1f32)
-            )
-        ;
-        */
-
         None
     }
 
@@ -269,7 +250,7 @@ impl StateData {
         // Planets 
         draw_sprite(
             ctx, frame, 
-            vp * self.battlefield.earth.model_mat(), 
+            vp * self.earth.model_mat(), 
             (0.0f32, 0.0f32, 1.0f32, 1.0f32),
             self.earth_texture.sampled(), 
             Some(ctx.viewport())
@@ -296,14 +277,14 @@ impl StateData {
             frame,
             ctx,
             targets,
-            &self.battlefield
+            &self.storage
         );
 
         let pointer_target = 
             match self.pointer_target {
                 PointerTarget::None => None,
                 PointerTarget::Sun => Some(Point2 { x : 0.0f32, y : 0.0f32 }),
-                PointerTarget::Earth => Some(self.battlefield.earth.pos()),
+                PointerTarget::Earth => Some(self.earth.pos()),
             }
         ;
 
@@ -311,7 +292,7 @@ impl StateData {
             pointer_target
             .and_then(
                 |x| 
-                self.battlefield
+                self.storage
                 .get(0)
                 .and_then(|y| point_at(y.core.pos, x))
             )
@@ -333,7 +314,7 @@ impl StateData {
     }
 
     pub fn player_pos(&self) -> Point2<f32> {
-        match self.battlefield.get(0) {
+        match self.storage.get(0) {
             Some(p) => p.core.pos,
             None => point2(0.0f32, 0.0f32),
         }

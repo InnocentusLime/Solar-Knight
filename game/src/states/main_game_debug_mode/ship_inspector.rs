@@ -87,7 +87,7 @@ impl ShipInspector {
             )
         ;
         res.update_ship_strings(
-            captured_state.battlefield
+            captured_state.storage
             .get(0).expect("Battlefield is empty")
         );
         res
@@ -141,14 +141,14 @@ impl DebugState for ShipInspector {
             }
 
             if egui::Button::new("Jump").ui(ui).clicked() {
-                if let Some(ship) = captured_state.battlefield.get(*id) {
+                if let Some(ship) = captured_state.storage.get(*id) {
                     *look = ship.core.pos;
                 }
             }
         });
 
         if old_id != self.id { 
-            if let Some(ship) = captured_state.battlefield.get(self.id) {
+            if let Some(ship) = captured_state.storage.get(self.id) {
                 self.update_ship_strings(ship)
             } else {
                 self.reset_ship_strings()
@@ -157,20 +157,21 @@ impl DebugState for ShipInspector {
         
         let id = &mut self.id;
 
+        let ai_machine = &mut captured_state.ai_machine;
         // Printing data about the ship
-        match captured_state.battlefield.get_mut(*id) {
-            None => { 
-                ui.heading("No ship at this cell");
-            },
-            Some(ship) => {
+        captured_state.storage
+        .unlock_mutations(&mut captured_state.square_map)
+        .mutate(*id,
+            |ship| {
+                // Editable scalar data
                 egui::Separator::default().horizontal().ui(ui);
                 
-                // TODO labels for the input_boxes
                 let dir = ship.core.direction();
                 input_box(ui, &mut self.mass, &mut ship.core.mass, "mass");
                 input_box(ui, &mut self.hp, unsafe { ship.core.hp_mut() }, "hp");
                 
 
+                // Editable non-scalar data
                 egui::Separator::default().horizontal().ui(ui);
                 
                 input_box_2(ui, &mut self.pos_x, &mut self.pos_y, &mut ship.core.pos.x, &mut ship.core.pos.y, "pos");
@@ -181,13 +182,27 @@ impl DebugState for ShipInspector {
                 });
                 ship.core.set_direction_angle(ang);
                 
+                // Internal (or current uneditable) data
                 egui::Separator::default().horizontal().ui(ui);
                 
                 ui.heading(format!("velocity : {}, {}", ship.core.velocity.x, ship.core.velocity.y));
                 ui.heading(format!("force : {}, {}", ship.core.force.x, ship.core.force.y));
                 ui.heading(format!("team : {:?}", ship.core.team()));
-                ui.heading(format!("ai_routine : {:?}", ship.think));
-                                
+                match ship.think {
+                    Some(think_id) => 
+                        ui.heading(
+                            format!(
+                                "ai_routine : {}", 
+                                ai_machine
+                                .get_ai_name(think_id.0)
+                                .unwrap()
+                            )
+                        )
+                    ,
+                    None => ui.heading("no ai"),
+                };
+                               
+                // engines
                 egui::Separator::default().horizontal().ui(ui);
 
                 ship.engines.iter()
@@ -198,6 +213,7 @@ impl DebugState for ShipInspector {
                     }
                 );
                         
+                // guns
                 egui::Separator::default().horizontal().ui(ui);
 
                 ship.guns.iter()
@@ -207,8 +223,8 @@ impl DebugState for ShipInspector {
                         ui.heading(format!("gun{} : {:?}", id, gun));
                     }
                 );
-            },
-        }
+            }
+        ).unwrap_or_else(|| { ui.heading("No ship at this cell"); });
     }
 
     fn render(

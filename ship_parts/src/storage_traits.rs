@@ -1,236 +1,206 @@
-use std::any::{ Any, TypeId };
-use std::time::Duration;
+use crate::storage::{ Ship, Storage, MutableStorage };
 
-use crate::earth::Earth;
-use crate::core::{ Core, Team };
-use crate::engine::Engine;
-use crate::gun::{ BulletSystem, Gun, BulletKind };
+// TODO Generic `GET` function. All systems should modify only
+// their own components when they reply to mutations. Observers
+// shouldn't be able to read each other's components when reacting,
+// which leads us to the following protocol:
+// 1. Mutate only your stuff
+// 2. You can read `Core`
 
-use std_ext::ExtractResultMut;
-use sys_api::basic_graphics_data::SpriteData;
-use sys_api::graphics_init::SpriteDataWriter;
-use crate::constants::VECTOR_NORMALIZATION_RANGE;
-use cgmath_ext::rotate_vector_ox;
-use crate::render::RenderInfo;
-use crate::collision_models::model_indices::*;
-use crate::ai_machine::*;
-use crate::square_map::SquareMapNode;
-
-use slab::Slab;
-use glium::VertexBuffer;
-use tinyvec::ArrayVec;
-use tinyvec::array_vec;
-use serde::{ Serialize, Deserialize };
-use cgmath::{ Point2, Matrix4, EuclideanSpace, InnerSpace, vec2, abs_diff_ne, abs_diff_eq };
-
-pub static mut FRICTION_KOEFF : f32 = 0.5f32;
-
-// TODO probably should place the gun limit into
-// a separate constant
-#[derive(Clone, Copy)]
-pub struct Ship {
-    pub render : RenderInfo,
-    // TODO make it part of the new ai system
-    pub think : Option<RoutineId>,
-    pub core : Core,
-    pub engines : ArrayVec<[Engine; 5]>,
-    pub guns : ArrayVec<[Gun; 5]>,
-    pub square_map_node : SquareMapNode,
+pub trait DeletionObserver {
+    fn on_delete(&mut self, storage : &mut MutableStorage, idx : usize);
 }
 
-impl Ship {
+pub trait SpawningObserver : DeletionObserver {
+    fn on_spawn(&mut self, storage : &mut MutableStorage, idx : usize);
+}
+
+pub trait MutationObserver : DeletionObserver {
+    fn on_mutation(&mut self, storage : &mut MutableStorage, idx : usize);
+}
+
+pub struct Observation<'a, Observer> {
+    me : &'a mut Storage,
+    observer : Observer,
+}
+
+impl<'a, Observer> Observation<'a, Observer> {
+    pub(crate) fn new(me : &'a mut Storage, observer : Observer) -> Self {
+        Observation {
+            me,
+            observer,
+        }
+    }
+
     #[inline]
-    pub fn model_mat(&self, size : (f32, f32)) -> Matrix4<f32> {
-        let direction = self.core.direction();
-
-        Matrix4::from_translation(self.core.pos.to_vec().extend(0.0f32)) * 
-        Matrix4::new(
-            direction.y, -direction.x, 0.0f32, 0.0f32,
-            direction.x, direction.y, 0.0f32, 0.0f32,
-            0.0f32, 0.0f32, 1.0f32, 0.0f32,
-            0.0f32, 0.0f32, 0.0f32, 1.0f32,
-        ) * 
-        Matrix4::from_nonuniform_scale(size.0, size.1, 1.0f32)
-    }
-        
-    pub fn new(
-        core : Core, 
-        think : Option<RoutineId>,
-        render : RenderInfo,
-        engines : ArrayVec<[Engine; 5]>,
-        guns : ArrayVec<[Gun; 5]>,
-    ) -> Self {
-        Ship { 
-            render,
-            think,
-            core,
-            engines,
-            guns,
-            square_map_node : SquareMapNode::new(),
-        }
-    }
-}
-
-pub struct TemplateTableEntry {
-    pub name : String,
-    pub prefab : Ship,
-}
-
-// Temporary code. In the future we want
-// to serialize all that jazz and have it
-// in the files.
-// Data driven design 101 ;)
-impl TemplateTableEntry {
-    pub fn player_ship() -> Self {
-        TemplateTableEntry {
-            name : "Player ship".to_owned(),
-            prefab : Ship::new(
-                Core::new(3, 5.0f32, CollisionModelIndex::Player, Team::Earth),
-                None,
-                RenderInfo { enemy_base_texture : false },
-                array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 5.0f32, 0)],
-                array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), BulletKind::TestBullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32))],
-            ),
-        }
-    }
-
-    pub fn turret_ship() -> Self {
-        TemplateTableEntry {
-            name : "Turret enemy".to_owned(),
-            prefab : Ship::new(
-                Core::new(3, 100.0f32, CollisionModelIndex::Player, Team::Hive),
-                Some(RoutineId(0)),
-                RenderInfo { enemy_base_texture : false },
-                array_vec![],
-                array_vec![_ => Gun::new(vec2(0.0f32, 0.0f32), BulletKind::LaserBall, Duration::from_millis(400), vec2(0.0f32, 1.0f32))],
-            ),
-        }
-    }
-
-    // TODO heavy body should be bigger
-    // and have different graphics
-    // TODO heavy should target earth in advance
-    pub fn heavy_body() -> Self {
-        TemplateTableEntry {
-            name : "Heavy's body".to_owned(),
-            prefab : Ship::new(
-                Core::new(10, 100.0f32, CollisionModelIndex::Player, Team::Hive),
-                Some(RoutineId(1)),
-                RenderInfo { enemy_base_texture : true },
-                array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 1, 1.0f32, 0)],
-                array_vec![],
-            ),
-        }
-    }
+    pub fn capacity(&self) -> usize { self.me.capacity() }
     
-    pub fn fly_ship() -> Self {
-        TemplateTableEntry {
-            name : "Fly".to_owned(),
-            prefab : Ship::new(
-                Core::new(1, 1.5f32, CollisionModelIndex::Player, Team::Hive),
-                Some(RoutineId(2)),
-                RenderInfo { enemy_base_texture : false },
-                array_vec![_ => Engine::new(vec2(0.0f32, 1.0f32), 2, 1.2f32, 0)],
-                array_vec![],
-            ),
-        }
-    }
+    #[inline]
+    pub fn get(&self, id : usize) -> Option<&Ship> { self.me.get(id) }
+
+    #[inline]
+    pub fn immutable_storage(&self) -> &Storage { self.me }
 }
 
-pub struct Battlefield {
-    uid_counter : u128,
-    pub earth : Earth,
-    mem : Slab<Ship>,
-    pub ai_machine : AiMachine,
-    pub template_table : Vec<TemplateTableEntry>,
-}
+impl<'a, Observer : DeletionObserver> Observation<'a, Observer> {
+    #[inline]
+    pub fn delete(&mut self, idx : usize) -> Option<Ship> {
+        let mut mutator = self.me.mutate();
+        self.observer.on_delete(&mut mutator, idx);
 
-impl Battlefield {
-    pub fn new() -> Battlefield {
-        Battlefield {
-            uid_counter : 0,
-            mem : Slab::new(),
-            earth : Earth::new(),
-            ai_machine : AiMachine::new(),
-            template_table : vec![
-                TemplateTableEntry::player_ship(),
-                TemplateTableEntry::turret_ship(),
-                TemplateTableEntry::heavy_body(),
-                TemplateTableEntry::fly_ship(),
-            ],
-        }
+        self.me.delete(idx)
     }
 
-    pub fn update(&mut self, dt : Duration) {
-        use crate::constants::VECTOR_NORMALIZATION_RANGE;
-
-        let friction_koeff = unsafe { FRICTION_KOEFF };
-
-        self.earth.update(dt);
-
-        self.mem.iter_mut()
-        .for_each(
-            |(_, c)| {
-                c.core.force = vec2(0.0f32, 0.0f32);
-
-                let (core, engines, guns) = (&mut c.core, &mut c.engines, &mut c.guns);
-                engines.iter_mut().for_each(|x| x.update(core, dt));
-                guns.iter_mut().for_each(|x| x.update(core, dt));
-
-                if 
-                    abs_diff_ne!(c.core.velocity.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) 
-                {
-                    c.core.force -= 0.24f32 * c.core.velocity.magnitude() * c.core.velocity;
-                }
-                let acceleration = c.core.force / c.core.mass;
-                c.core.pos += dt.as_secs_f32() * c.core.velocity + dt.as_secs_f32().powi(2) * acceleration / 2.0f32;
-                c.core.velocity += dt.as_secs_f32() * acceleration;
+    #[inline]
+    pub fn filter<F : Fn(&Ship) -> bool>(&mut self, f : F) {
+        for idx in (0..self.me.capacity()) {
+            if self.me.get(idx).map(|x| f(x)).unwrap_or(false) {
+                self.delete(idx);
             }
-        );
-
-        self.mem.retain(|_, x| x.core.is_alive() || x.core.team() == Team::Earth);
+        }
     }
+}
+
+impl<'a, Observer : SpawningObserver> Observation<'a, Observer> {
+    pub fn spawn(&mut self, ship : Ship) {
+        let idx = self.me.spawn(ship);
+        
+        let mut mutator = self.me.mutate();
+        self.observer.on_spawn(&mut mutator, idx);
+    }
+    
+    // TODO shouldn't exist here.
+    pub fn spawn_template(&mut self, template_id : usize) {
+        let idx = self.me.spawn_template(template_id);
+        
+        let mut mutator = self.me.mutate();
+        self.observer.on_spawn(&mut mutator, idx);
+    }
+}
    
-    pub fn spawn(&mut self, mut ship : Ship) {
-        ship.core.set_uid(self.uid_counter);
-        self.uid_counter += 1;
-        self.mem.insert(ship);
+impl<'a, Observer : MutationObserver> Observation<'a, Observer> {
+    #[inline]
+    pub fn mutate<T, F : FnMut(&mut Ship) -> T>(&mut self, idx : usize, mut f : F) -> Option<T> {
+        let observer = &mut self.observer;
+        let mut mutator = self.me.mutate();
+    
+        mutator.get_mut(idx)
+        .map(|x| f(x))
+        .map(|x| { observer.on_mutation(&mut mutator, idx); x })
     }
 
-    pub fn spawn_template(&mut self, id : usize) {
-        self.spawn(self.template_table[id].prefab);
+    // TODO we might want to have a reaction if the ship isn't present
+    pub fn mutate_range<F : FnMut(&mut Ship), I : Iterator<Item = usize>>(&mut self, mut f : F, it : I) {
+        for idx in it {
+            self.mutate(idx, &mut f);
+        }
     }
+    
+    #[inline]
+    pub fn mutate_each<F : FnMut(&mut Ship)>(&mut self, mut f : F) {
+        for idx in (0..self.me.capacity()) {
+            self.mutate(idx, &mut f);
+        }
+    }
+}
+
+#[macro_export(local_inner_macros)]
+macro_rules! declare_observers {
+    (
+    spawning_observers : {
+        $($spawn_name:ident : $spawn_obs:ty),* $(,)?
+    },
+    deletion_observers : {
+        $($delete_name:ident : $delete_obs:ty),* $(,)?
+    },
+    mutation_observers : {
+        $($mutate_name:ident : $mutate_obs:ty),* $(,)?
+    },
+    ) => {
+        pub struct DeletionObserverPack<'a> {
+            _phantom : std::marker::PhantomData<&'a mut ()>
+            $(, $delete_name : &'a mut $delete_obs)*
+        }
+
+        impl<'a> DeletionObserver for DeletionObserverPack<'a> {
+            fn on_delete(&mut self, storage : &mut MutableStorage, idx : usize) {
+                $(self.$delete_name.on_delete(storage, idx));*
+            }
+        }
+        
+        pub struct SpawningObserverPack<'a> {
+            _phantom : std::marker::PhantomData<&'a mut ()>
+            $(, $spawn_name : &'a mut $spawn_obs)*
+        }
+        
+        impl<'a> DeletionObserver for SpawningObserverPack<'a> {
+            fn on_delete(&mut self, storage : &mut MutableStorage, idx : usize) {
+                $(self.$spawn_name.on_delete(storage, idx));*
+            }
+        }
+
+        impl<'a> SpawningObserver for SpawningObserverPack<'a> {
+            fn on_spawn(&mut self, storage : &mut MutableStorage, idx : usize) {
+                $(self.$spawn_name.on_spawn(storage, idx));*
+            }
+        }
+
+        pub struct MutationObserverPack<'a> {
+            _phantom : std::marker::PhantomData<&'a mut ()>
+            $(, $mutate_name : &'a mut $mutate_obs)*
+        }
+        
+        impl<'a> DeletionObserver for MutationObserverPack<'a> {
+            fn on_delete(&mut self, storage : &mut MutableStorage, idx : usize) {
+                $(self.$mutate_name.on_delete(storage, idx));*;
+            }
+        }
+
+        impl<'a> MutationObserver for MutationObserverPack<'a> {
+            fn on_mutation(&mut self, storage : &mut MutableStorage, idx : usize) {
+                $(self.$mutate_name.on_mutation(storage, idx));*
+            }
+        }
+
+        impl Storage {
+            pub fn unlock_deletion<'a>(
+                &'a mut self,
+                $($delete_name : &'a mut $delete_obs),*
+            ) -> Observation<'a, DeletionObserverPack> {
+                Observation::new(
+                    self,
+                    DeletionObserverPack {
+                        _phantom : std::marker::PhantomData
+                        $(, $delete_name)*
+                    }
+                )
+            }
             
-    pub fn fill_buffer(&self, buff : &mut VertexBuffer<SpriteData>) {
-        use sys_api::graphics_init::{ ENEMY_LIMIT };
-                
-        //self.mem.iter().for_each(|(_, x)| (x.render)(x, &mut writer));
-    }
-
-    #[inline]
-    pub fn get(&self, id : usize) -> Option<&Ship> { self.mem.get(id) }
-    
-    #[inline]
-    pub fn get_mut(&mut self, id : usize) -> Option<&mut Ship> { self.mem.get_mut(id) }
-    
-    #[inline]
-    pub fn len(&self) -> usize { self.mem.len() }
-    
-    #[inline]
-    pub fn capacity(&self) -> usize { self.mem.capacity() }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = &Ship> {
-        self.mem.iter().map(|(_, x)| x)
-    }
-
-    #[inline]
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Ship> {
-        self.iter_mut_indices().map(|(_, x)| x)
-    }
-
-    #[inline]
-    pub fn iter_mut_indices(&mut self) -> impl Iterator<Item = (usize, &mut Ship)> {
-        self.mem.iter_mut()
-    }
+            pub fn unlock_spawning<'a>(
+                &'a mut self,
+                $($spawn_name : &'a mut $spawn_obs),*
+            ) -> Observation<'a, SpawningObserverPack> {
+                Observation::new(
+                    self,
+                    SpawningObserverPack {
+                        _phantom : std::marker::PhantomData
+                        $(, $spawn_name)*
+                    }
+                )
+            }
+            
+            pub fn unlock_mutations<'a>(
+                &'a mut self,
+                $($mutate_name : &'a mut $mutate_obs),*
+            ) -> Observation<'a, MutationObserverPack> {
+                Observation::new(
+                    self,
+                    MutationObserverPack {
+                        _phantom : std::marker::PhantomData
+                        $(, $mutate_name)*
+                    }
+                )
+            }
+        }
+    };
 }

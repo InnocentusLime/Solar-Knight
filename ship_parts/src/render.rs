@@ -1,6 +1,5 @@
-use crate::storage_traits::Battlefield;
+use crate::storage::{ Ship, Storage };
 use crate::core::Team;
-use crate::storage_traits::Ship;
 use sys_api::basic_graphics_data::SpriteData;
 use sys_api::graphics_init::SpriteDataWriter;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
@@ -118,7 +117,7 @@ impl RenderSystem {
         frame : &mut Frame, 
         ctx : &mut GraphicsContext, 
         _targets : &mut RenderTargets,
-        battlefield : &Battlefield
+        battlefield : &Storage
     ) {
         use sys_api::graphics_init::ENEMY_LIMIT;
         use sys_api::graphics_utils::{ draw_sprite, draw_instanced_sprite };

@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use glium::VertexBuffer;
 
-use crate::storage_traits::Battlefield;
+use crate::storage::Ship;
+use crate::storage_traits::{ Observation, MutationObserver };
 use cgmath_ext::{ rotate_vector_ox, rotate_vector_oy };
 use super::core::{ Core, Team };
 use sys_api::basic_graphics_data::SpriteData;
@@ -156,14 +157,12 @@ impl BulletSystem {
         self.mem.push(bullet);
     }
 
-    // TODO return an error code
-    pub fn shoot_from_gun(
+    pub fn shoot_from_gun_ship(
         &mut self,
-        battlefield : &mut Battlefield,
+        ship : &mut Ship,
         parent : usize,
         gun : usize,
     ) {
-        let ship = battlefield.get_mut(parent).unwrap();
         let gun = ship.guns.get_mut(gun).unwrap();
 
         let off = rotate_vector_oy(ship.core.direction(), gun.offset);
@@ -225,8 +224,23 @@ impl BulletSystem {
         }
     }
 
+    // TODO return an error code
+    #[inline]
+    pub fn shoot_from_gun<Observer : MutationObserver>(
+        &mut self,
+        storage : &mut Observation<Observer>,
+        parent : usize,
+        gun : usize,
+    ) {
+        storage.mutate(parent, |ship| self.shoot_from_gun_ship(ship, parent, gun));
+    }
+
     // FIXME just iterating over all enemies probably sucks.
-    pub fn update(&mut self, c : &mut Battlefield, dt : Duration) 
+    pub fn update<Observer : MutationObserver>(
+        &mut self, 
+        c : &mut Observation<Observer>, 
+        dt : Duration
+    ) 
     {
         use collision::*;
         use std_ext::*;
@@ -251,22 +265,25 @@ impl BulletSystem {
                         let my_body = collision_models::consts::BulletTester.apply_transform(&bullet.transform());
                         let my_aabb = my_body.aabb();
 
-                        for target in c.iter_mut().map(|x| &mut x.core) {                
-                            if bullet.lifetime.my_is_zero() { break }
+                        c.mutate_each(
+                            |ship| {
+                                if bullet.lifetime.my_is_zero() { return }
 
-                            let target_body = target.phys_body();
-                            let target_aabb = target_body.aabb();
+                                let target = &mut ship.core;
+                                let target_body = target.phys_body();
+                                let target_aabb = target_body.aabb();
             
-                            if 
-                                target.team() != bullet.team &&
-                                target.hp() > 0 && 
-                                target_aabb.collision_test(my_aabb) && 
-                                target_body.check_collision(&my_body)
-                            {
-                                target.damage(1);
-                                bullet.lifetime = <Duration as DurationExt>::my_zero();
-                            } 
-                        }
+                                if 
+                                    target.team() != bullet.team &&
+                                    target.hp() > 0 && 
+                                    target_aabb.collision_test(my_aabb) && 
+                                    target_body.check_collision(&my_body)
+                                {
+                                    target.damage(1);
+                                    bullet.lifetime = <Duration as DurationExt>::my_zero();
+                                } 
+                            }
+                        )
                     },        
                     BulletKind::LaserBall => {
                         bullet.pos += (0.7f32 * dt.as_secs_f32()) * bullet.direction;
@@ -274,22 +291,25 @@ impl BulletSystem {
                         let my_body = collision_models::consts::LaserBall.apply_transform(&bullet.transform());
                         let my_aabb = my_body.aabb();
 
-                        for target in c.iter_mut().map(|x| &mut x.core) {                
-                            if bullet.lifetime.my_is_zero() { break }
+                        c.mutate_each(
+                            |ship| {
+                                if bullet.lifetime.my_is_zero() { return }
 
-                            let target_body = target.phys_body();
-                            let target_aabb = target_body.aabb();
+                                let target = &mut ship.core;
+                                let target_body = target.phys_body();
+                                let target_aabb = target_body.aabb();
             
-                            if 
-                                target.team() != bullet.team &&
-                                target.hp() > 0 && 
-                                target_aabb.collision_test(my_aabb) && 
-                                target_body.check_collision(&my_body)
-                            {
-                                target.damage(1);
-                                bullet.lifetime = <Duration as DurationExt>::my_zero();
-                            } 
-                        }
+                                if 
+                                    target.team() != bullet.team &&
+                                    target.hp() > 0 && 
+                                    target_aabb.collision_test(my_aabb) && 
+                                    target_body.check_collision(&my_body)
+                                {
+                                    target.damage(1);
+                                    bullet.lifetime = <Duration as DurationExt>::my_zero();
+                                } 
+                            }
+                        )
                     },
                     BulletKind::SpinningLaser => {
                         let (parent_pos, parent_direction) = 
@@ -304,22 +324,25 @@ impl BulletSystem {
                         let my_body = collision_models::consts::LaserBeam.apply_transform(&bullet.transform());
                         let my_aabb = my_body.aabb();
 
-                        for target in c.iter_mut().map(|x| &mut x.core) {                
-                            if bullet.lifetime.my_is_zero() { break }
+                        c.mutate_each(
+                            |ship| {
+                                if bullet.lifetime.my_is_zero() { return }
 
-                            let target_body = target.phys_body();
-                            let target_aabb = target_body.aabb();
+                                let target = &mut ship.core;
+                                let target_body = target.phys_body();
+                                let target_aabb = target_body.aabb();
             
-                            if 
-                                target.team() != bullet.team &&
-                                target.hp() > 0 && 
-                                target_aabb.collision_test(my_aabb) && 
-                                target_body.check_collision(&my_body)
-                            {
-                                target.damage(1);
-                                //bullet.lifetime = <Duration as DurationExt>::my_zero();
-                            } 
-                        }
+                                if 
+                                    target.team() != bullet.team &&
+                                    target.hp() > 0 && 
+                                    target_aabb.collision_test(my_aabb) && 
+                                    target_body.check_collision(&my_body)
+                                {
+                                    target.damage(1);
+                                    //bullet.lifetime = <Duration as DurationExt>::my_zero();
+                                } 
+                            }
+                        )
                     },
                     BulletKind::LaserBeam => {
                         let (parent_pos, parent_direction) = 
@@ -333,22 +356,25 @@ impl BulletSystem {
                         let my_body = collision_models::consts::LaserBeam.apply_transform(&bullet.transform());
                         let my_aabb = my_body.aabb();
 
-                        for target in c.iter_mut().map(|x| &mut x.core) {                
-                            if bullet.lifetime.my_is_zero() { break }
+                        c.mutate_each(
+                            |ship| {
+                                if bullet.lifetime.my_is_zero() { return }
 
-                            let target_body = target.phys_body();
-                            let target_aabb = target_body.aabb();
+                                let target = &mut ship.core;
+                                let target_body = target.phys_body();
+                                let target_aabb = target_body.aabb();
             
-                            if 
-                                target.team() != bullet.team &&
-                                target.hp() > 0 && 
-                                target_aabb.collision_test(my_aabb) && 
-                                target_body.check_collision(&my_body)
-                            {
-                                target.damage(1);
-                                //bullet.lifetime = <Duration as DurationExt>::my_zero();
-                            } 
-                        }
+                                if 
+                                    target.team() != bullet.team &&
+                                    target.hp() > 0 && 
+                                    target_aabb.collision_test(my_aabb) && 
+                                    target_body.check_collision(&my_body)
+                                {
+                                    target.damage(1);
+                                    //bullet.lifetime = <Duration as DurationExt>::my_zero();
+                                } 
+                            }
+                        )
                     },
                 }
             } 

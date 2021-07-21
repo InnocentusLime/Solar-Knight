@@ -12,7 +12,7 @@ impl ShipPlacement {
             ShipPlacement {
                 placing : false,
                 placed_ship_info : 0,
-                current_ship : captured_state.battlefield.template_table[0].prefab,
+                current_ship : captured_state.storage.template_table[0].prefab,
             }
         )
     }
@@ -42,7 +42,9 @@ impl DebugState for ShipPlacement {
                     } => {
                         if *button == event::MouseButton::Left && *state == event::ElementState::Pressed {
                             if !pointer_in_ui && self.placing {
-                                captured_state.battlefield.spawn(self.current_ship.clone());
+                                captured_state.storage
+                                .unlock_spawning(&mut captured_state.square_map)
+                                .spawn(self.current_ship.clone());
                             }
                         }
                     },
@@ -68,8 +70,8 @@ impl DebugState for ShipPlacement {
         .show_index(
             ui, 
             &mut self.placed_ship_info,
-            captured_state.battlefield.template_table.len(),
-            |u| captured_state.battlefield.template_table[u].name.to_owned()
+            captured_state.storage.template_table.len(),
+            |u| captured_state.storage.template_table[u].name.to_owned()
         );
    
         if !self.placing {
@@ -79,7 +81,7 @@ impl DebugState for ShipPlacement {
         }
 
         if self.placing {
-            self.current_ship = captured_state.battlefield.template_table[self.placed_ship_info].prefab;
+            self.current_ship = captured_state.storage.template_table[self.placed_ship_info].prefab;
             self.current_ship.core.pos = *look + input_tracker.mouse_position();
         }
     }

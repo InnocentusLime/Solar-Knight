@@ -46,7 +46,6 @@ pub struct Core {
     direction : Vector2<f32>,
     pub force : Vector2<f32>,
     pub velocity : Vector2<f32>,
-    uid : u128,
 }
 
 impl Core {
@@ -60,7 +59,6 @@ impl Core {
             direction : vec2(0.0f32, 1.0f32),
             force : vec2(0.0f32, 0.0f32),
             velocity : vec2(0.0f32, 0.0f32),
-            uid : 0,
         }
     }
 
@@ -132,13 +130,5 @@ impl Core {
     pub fn set_direction_angle(&mut self, ang : f32) {
         let (s, c) = (std::f32::consts::FRAC_PI_2 - ang).sin_cos();
         self.set_direction(vec2(c, s));
-    }
-
-    #[inline]
-    pub fn uid(&self) -> u128 { self.uid }
-
-    #[inline]
-    pub (crate) fn set_uid(&mut self, uid : u128) {
-        self.uid = uid;
     }
 }

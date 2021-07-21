@@ -1,22 +1,39 @@
 use cgmath::Point2;
 
-use crate::storage_traits::{ Battlefield, Ship };
-
-use std::cell::Cell;
+use crate::storage::{ Ship, MutableStorage };
+use crate::storage_traits::*;
 
 #[derive(Clone, Copy)]
 pub struct SquareMapNode {
     next : Option<usize>,
-    my_square : usize,
+    prev : Option<usize>,
+    square_id : usize,
 }
 
 impl SquareMapNode {
     pub fn new() -> Self {
         SquareMapNode {
             next : None,
-            my_square : 0,
+            prev : None,
+            square_id : 0,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct StorageAccessError;
+
+pub trait SquareMapObject {
+    fn pos(&self) -> Point2<f32>;
+    fn square_map_node(&self) -> &SquareMapNode;
+    fn square_map_node_mut(&mut self) -> &mut SquareMapNode;
+}
+
+pub trait SquareMapHost {
+    type Object : SquareMapObject;
+
+    fn get(&self, idx : usize) -> Result<&Self::Object, StorageAccessError>;
+    fn get_mut(&mut self, idx : usize) -> Result<&mut Self::Object, StorageAccessError>;
 }
 
 #[derive(Clone, Copy)]
@@ -24,6 +41,9 @@ struct Square {
     start : Option<usize>,
 }
 
+// NOTE if it turns out that the current impl is too slow,
+// try using a more lazy computation-like appraoch for
+// updating the square map.
 /// A square map is a special data structure which helps
 /// the game narrow down the search for objects near some
 /// point. In Solar Knight this helps us optimize things like
@@ -53,69 +73,96 @@ impl SquareMap {
         sq_x + sq_y*Self::SQUARE_MAP_SIDE_COUNT
     }
 
-    fn update_ship_square(&mut self, ship_id : usize, ship : &mut Ship) {
-        let sq_id = Self::get_square(ship.core.pos);
-        let square = self.squares.get_mut(sq_id).expect("Square map out of range");
+    #[inline]
+    fn insert_into_square<Host : SquareMapHost>(square_id : usize, square : &mut Square, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> {
+        let next_id = square.start.map(|x| { square.start = Some(idx); x });
 
-        ship.square_map_node.my_square = sq_id;
-        match square.start.as_mut() {
-            Some(start) => {
-                ship.square_map_node.next = Some(*start);
-                *start = ship_id
-            },
-            None => ship.square_map_node.next = None,
+        let the_inserted = host.get_mut(idx)?;
+        the_inserted.square_map_node_mut().prev = None;
+        the_inserted.square_map_node_mut().next = next_id;
+        the_inserted.square_map_node_mut().square_id = square_id;
+
+        if let Some(next_id) = next_id {
+            host.get_mut(next_id)?.square_map_node_mut().prev = Some(idx);
         }
+
+        Ok(())
     }
 
-    /// Updates the square map data, making all the data up to date.
-    pub fn update<'a>(&'a mut self, battlefield : &'a mut Battlefield) -> RelevantSquareMap<'a> {
-        battlefield.iter_mut_indices()
-        .for_each(|(idx, ship)| self.update_ship_square(idx, ship));
+    pub fn insert<Host : SquareMapHost>(&mut self, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> {
+        let pos = host.get(idx)?.pos();
 
-        RelevantSquareMap { me : self, battlefield }
-    }
-}
+        let square_id = Self::get_square(pos);
+        // TODO error code
+        let square = self.squares.get_mut(square_id).expect("Square ID out of range");
 
-pub struct SquareIter<'a, 'b : 'a> {
-    square_map : &'a RelevantSquareMap<'b>,
-    curr : Option<usize>,
-}
+        Self::insert_into_square(square_id, square, host, idx)
+    } 
 
-impl<'a, 'b : 'a> Iterator for SquareIter<'a, 'b> {
-    type Item = (usize, &'a Ship);
+    pub fn delete<Host : SquareMapHost>(&mut self, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> {
+        let (prev, next) = {
+            let node = host.get(idx)?.square_map_node();
+            (node.prev, node.next)
+        };
 
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.curr {
-            Some(id) => {
-                let ship = self.square_map.battlefield().get(id).unwrap();
-                self.curr = ship.square_map_node.next;
-                Some((id, ship))
-            },
-            None => None,
+        if let Some(prev) = prev {
+            host.get_mut(prev)?.square_map_node_mut().next = next;
         }
-    }
-}
 
-pub struct RelevantSquareMap<'a> {
-    me : &'a mut SquareMap,
-    battlefield : &'a mut Battlefield,
-}
-
-impl<'a> RelevantSquareMap<'a> {
-    pub fn battlefield(&self) -> &Battlefield { &self.battlefield }
-
-    pub fn get_ship_square(ship : &Ship) -> usize {
-        SquareMap::get_square(ship.core.pos)
-    }
-
-    pub fn iter_ships_in_square_with_indices<'b>(&'b self, sq_id : usize) -> SquareIter<'b, 'a> 
-    where
-        'a : 'b
-    {
-        let curr = self.me.squares[sq_id].start;
-        SquareIter {
-            square_map : self,
-            curr,
+        if let Some(next) = next {
+            host.get_mut(next)?.square_map_node_mut().prev = prev;
         }
+
+        Ok(())
+    }
+
+    pub fn update_data<Host : SquareMapHost>(&mut self, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> {
+        let (new_square, current_square) = {
+            let obj = host.get(idx)?;
+            (Self::get_square(obj.pos()), obj.square_map_node().square_id)
+        };
+
+        if new_square != current_square {
+            self.delete(host, idx)?;
+            let square = self.squares.get_mut(new_square).expect("Square ID out of range");
+            Self::insert_into_square(new_square, square, host, idx)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl SquareMapObject for Ship {
+    fn pos(&self) -> cgmath::Point2<f32> { self.core.pos }
+    fn square_map_node(&self) -> &crate::square_map::SquareMapNode { &self.square_map_node }
+    fn square_map_node_mut(&mut self) -> &mut crate::square_map::SquareMapNode { &mut self.square_map_node }
+}
+
+impl<'a> SquareMapHost for MutableStorage<'a> {
+    type Object = Ship;
+
+    fn get(&self, idx : usize) -> Result<&Self::Object, crate::square_map::StorageAccessError> { 
+        self.get(idx).ok_or(crate::square_map::StorageAccessError)
+    }
+    fn get_mut(&mut self, idx : usize) -> Result<&mut Self::Object, crate::square_map::StorageAccessError> {
+        self.get_mut(idx).ok_or(crate::square_map::StorageAccessError)
+    }
+}
+
+impl MutationObserver for SquareMap {
+    fn on_mutation(&mut self, storage : &mut MutableStorage, idx : usize) {
+        self.update_data(storage, idx).unwrap()
+    }
+}
+
+impl SpawningObserver for SquareMap {
+    fn on_spawn(&mut self, storage : &mut MutableStorage, idx : usize) {
+        self.insert(storage, idx).unwrap()
+    }
+}
+
+impl DeletionObserver for SquareMap {
+    fn on_delete(&mut self, storage : &mut MutableStorage, idx : usize) {
+        self.delete(storage, idx).unwrap()
     }
 }

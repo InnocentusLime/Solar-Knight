@@ -33,8 +33,6 @@ impl AttachmentEdit {
             AttachmentEdit {
                 info : AttachmentInfo {
                     parent_id : 0,
-                    parent_uid : 0,
-                    my_uid : 0,
                 },
                 ship_id : 0,
                 parent_id_buff : "0".to_owned(),
@@ -76,12 +74,10 @@ impl DebugState for AttachmentEdit {
         input_box(ui, &mut self.parent_id_buff, &mut self.info.parent_id, "parent id");
         if egui::Button::new("Add attachment").ui(ui).clicked() {
             match 
-                (captured_state.battlefield.get(self.info.parent_id),
-                captured_state.battlefield.get(self.ship_id))
+                (captured_state.storage.get(self.info.parent_id),
+                captured_state.storage.get(self.ship_id))
             {
                 (Some(parent), Some(ship)) => {
-                    self.info.parent_uid = parent.core.uid();
-                    self.info.my_uid = ship.core.uid();
                     captured_state.attach_sys.add_attachment(self.ship_id, self.info);
                 },
                 (_, _) => {

@@ -9,7 +9,7 @@ use glium::{ Frame, Surface, glutin };
 use glutin::{ event, event_loop::ControlFlow };
 use egui::{ epaint::ClippedShape, Widget, Sense, Id };
 
-use ship_parts::{ Ship, Battlefield };
+use ship_parts::{ Ship, Storage };
 
 use std::str::FromStr;
 

@@ -36,7 +36,7 @@ pub enum Team {
 /// be used to do some behaviour to emulate a death state for a boss.
 // TODO consider inlining `Core` into `Ship`
 // FIXME `mass`, `force`, `velocity` and `direction`, `pos` should be protected
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Core {
     hp : u64,
     model : CollisionModelIndex,

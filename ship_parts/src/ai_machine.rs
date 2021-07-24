@@ -181,9 +181,7 @@ impl AiMachine {
                     None => continue,
                 }
             };
-
-            let immutable_storage = storage.immutable_storage();
-
+            
             if alive {
                 if let Some(routine_id) = think {
                     (self.routines[routine_id.0].1)(

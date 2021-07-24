@@ -124,7 +124,7 @@ impl StateData {
                 ),
                 ..
             } => {
-                if let virtual_keycode = Some(event::VirtualKeyCode::D) { 
+                if let Some(event::VirtualKeyCode::D) = virtual_keycode {
                     if input_tracker.is_key_down(event::VirtualKeyCode::LControl) {
                         return Some(Box::new(main_game_debug_mode::StateData::init));
                     }
@@ -189,7 +189,7 @@ impl StateData {
             self.timer = self.timer.my_saturating_sub(dt);
         }
 
-        let mut deletion_lock = self.storage.unlock_deletion(&mut self.square_map, &mut self.attach_sys);
+        let mut deletion_lock = self.storage.unlock_deletion(&mut self.square_map, &mut self.attach_sys, &mut self.bullet_sys);
         deletion_lock.filter(|x| x.core.team() != Team::Earth && x.core.hp() == 0);
 
         let mut mutation_lock = self.storage.unlock_mutations(&mut self.square_map);

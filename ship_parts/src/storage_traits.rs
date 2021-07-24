@@ -39,7 +39,10 @@ impl<'a, Observer> Observation<'a, Observer> {
     pub fn get(&self, id : usize) -> Option<&Ship> { self.me.get(id) }
 
     #[inline]
-    pub fn immutable_storage(&self) -> &Storage { self.me }
+    pub fn storage(&self) -> &Storage { self.me }
+
+    #[inline]
+    pub fn observer(&self) -> &Observer { &self.observer }
 }
 
 impl<'a, Observer : DeletionObserver> Observation<'a, Observer> {
@@ -119,7 +122,7 @@ macro_rules! declare_observers {
     ) => {
         pub struct DeletionObserverPack<'a> {
             _phantom : std::marker::PhantomData<&'a mut ()>
-            $(, $delete_name : &'a mut $delete_obs)*
+            $(, pub $delete_name : &'a mut $delete_obs)*
         }
 
         impl<'a> DeletionObserver for DeletionObserverPack<'a> {
@@ -130,7 +133,7 @@ macro_rules! declare_observers {
         
         pub struct SpawningObserverPack<'a> {
             _phantom : std::marker::PhantomData<&'a mut ()>
-            $(, $spawn_name : &'a mut $spawn_obs)*
+            $(, pub $spawn_name : &'a mut $spawn_obs)*
         }
         
         impl<'a> DeletionObserver for SpawningObserverPack<'a> {
@@ -147,7 +150,7 @@ macro_rules! declare_observers {
 
         pub struct MutationObserverPack<'a> {
             _phantom : std::marker::PhantomData<&'a mut ()>
-            $(, $mutate_name : &'a mut $mutate_obs)*
+            $(, pub $mutate_name : &'a mut $mutate_obs)*
         }
         
         impl<'a> DeletionObserver for MutationObserverPack<'a> {

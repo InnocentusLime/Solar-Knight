@@ -31,6 +31,7 @@ crate::declare_observers! {
     deletion_observers : {
         square_map : crate::square_map::SquareMap,
         attach_sys : crate::attachment::AttachmentSystem,
+        bullet_sys : crate::gun::BulletSystem,
     },
     mutation_observers : {
         square_map : crate::square_map::SquareMap,

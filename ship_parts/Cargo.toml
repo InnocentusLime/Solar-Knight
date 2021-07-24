@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 lazy_static = "1.4.0"
+float-ord = "0.3.1"
 slab = { version = "0.4.3", features = ["serde"]}
 tinyvec = { version = "1.2.0", features = ["serde"]}
 cgmath = { version = "0.18.0", features = ["serde"]}

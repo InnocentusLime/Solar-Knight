@@ -14,6 +14,7 @@ struct ParentInfo {
     children : HashSet<usize>,
 }
 
+// TODO bench this versus the UID strategy
 pub struct AttachmentSystem {
     subscribers : HashMap<usize, AttachmentInfo>,
     parent_infos : HashMap<usize, ParentInfo>,
@@ -48,6 +49,9 @@ impl AttachmentSystem {
 
     pub fn add_attachment(&mut self, id : usize, info : AttachmentInfo) {
         self.subscribers.insert(id, info);
+        self.parent_infos.entry(info.parent_id)
+        .or_insert(ParentInfo { children : HashSet::new() })
+        .children.insert(id);
     }
 }
 

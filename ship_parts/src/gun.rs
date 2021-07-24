@@ -1,15 +1,18 @@
 use std::time::Duration;
+use std::collections::{ HashMap, HashSet };
 
+use slab::Slab;
 use glium::VertexBuffer;
 
-use crate::storage::Ship;
-use crate::storage_traits::{ Observation, MutationObserver };
-use cgmath_ext::{ rotate_vector_ox, rotate_vector_oy };
+use crate::MutationObserverPack;
+use crate::storage::{ Ship, MutableStorage };
+use crate::storage_traits::{ Observation, MutationObserver, DeletionObserver };
+use cgmath_ext::{ rotate_vector_ox, rotate_vector_oy, rotate_vector_angle };
 use super::core::{ Core, Team };
 use sys_api::basic_graphics_data::SpriteData;
 use std_ext::{ collections::memory_chunk::MemoryChunk, duration_ext::* };
 use sys_api::graphics_init::PLAYER_BULLET_LIMIT;
-use cgmath_ext::matrix3_from_translation;
+use cgmath_ext::{ matrix3_from_translation };
 
 use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace, InnerSpace, point2, vec2 };
 
@@ -22,28 +25,43 @@ pub const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
 pub enum BulletKind {
     TestBullet,
     LaserBall,
+    SpinningLaser,
+    LaserBeam,
+    HomingMissle,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum BulletData {
+    TestBullet,
+    LaserBall,
     SpinningLaser, // Maybe add damange cooldown
     LaserBeam,
-//  HomingBullet(target),
+    HomingMissle {
+        align_timer : Duration,
+        target : Option<usize>,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Bullet {
     pub pos : Point2<f32>,
     pub direction : Vector2<f32>,
-    pub kind : BulletKind,
+    pub kind : BulletData,
     pub lifetime : Duration,
     pub team : Team,
     pub parent : usize,
 }
 
 impl Bullet {
+    const HOMING_MISSLE_ALIGN_TIME : Duration = Duration::from_millis(500);
+    
     pub fn size(&self) -> (f32, f32) {
         use sys_api::graphics_init::SCREEN_WIDTH;
         match self.kind {
-            BulletKind::TestBullet => (0.06f32, 0.09f32),
-            BulletKind::LaserBall => (0.03f32, 0.03f32),
-            BulletKind::SpinningLaser { .. } | BulletKind::LaserBeam { .. } => (0.03f32, SCREEN_WIDTH / 1.5f32),
+            BulletData::TestBullet => (0.06f32, 0.09f32),
+            BulletData::LaserBall => (0.03f32, 0.03f32),
+            BulletData::SpinningLaser { .. } | BulletData::LaserBeam { .. } => (0.03f32, SCREEN_WIDTH / 1.5f32),
+            BulletData::HomingMissle { .. } => (0.06f32, 0.09f32),
         }
     }
 
@@ -63,7 +81,7 @@ impl Bullet {
         ) *
         (
             match self.kind {
-                BulletKind::SpinningLaser { .. } | BulletKind::LaserBeam { .. } => {
+                BulletData::SpinningLaser { .. } | BulletData::LaserBeam { .. } => {
                     Matrix4::from_translation(vec2(0.0f32, SCREEN_WIDTH / 1.5f32).extend(0.0f32))
                 },
                 _ => Matrix4::one(),
@@ -141,20 +159,47 @@ impl Default for Gun {
         )
     }
 }
+    
+#[inline]
+fn rotate_towards(
+    pos : Point2<f32>,
+    direc : Vector2<f32>,
+    target : Point2<f32>,
+    angular_speed : f32,
+    dt : Duration,
+) -> Vector2<f32> {
+    let dir_vec = (target - pos).normalize();
+    let ang = direc.angle(dir_vec);
 
+    if ang.0.abs() > angular_speed * dt.as_secs_f32() {
+        let (c, s) =
+            if ang.0 > 0.0f32 {
+                ((angular_speed * dt.as_secs_f32()).cos(), (angular_speed * dt.as_secs_f32()).sin())
+            } else {
+                ((angular_speed * dt.as_secs_f32()).cos(), -(angular_speed * dt.as_secs_f32()).sin())
+            } 
+        ;
+        rotate_vector_ox(direc, vec2(c, s))
+    } else { dir_vec }
+}
+
+// TODO bench this versus the UID strategy
 pub struct BulletSystem {
-    mem : MemoryChunk<Bullet>,
+    mem : Slab<Bullet>,
+    // tracked_ships : ship -> {bullets}
+    tracked_ships : HashMap<usize, HashSet<usize>>,
 }
 
 impl BulletSystem {
     pub fn new() -> Self {
         BulletSystem {
-            mem : MemoryChunk::with_capacity(PLAYER_BULLET_LIMIT),
+            mem : Slab::with_capacity(PLAYER_BULLET_LIMIT),
+            tracked_ships : HashMap::new(),
         }
     }
 
     pub fn spawn(&mut self, mut bullet : Bullet) {
-        self.mem.push(bullet);
+        self.mem.insert(bullet);
     }
 
     pub fn shoot_from_gun_ship(
@@ -179,7 +224,7 @@ impl BulletSystem {
                         pos : ship.core.pos + off,
                         team : ship.core.team(),
                         direction : ship.core.direction(),
-                        kind : gun.kind(),
+                        kind : BulletData::TestBullet,
                         lifetime : Duration::from_secs(3),
                         parent,
                     }
@@ -191,7 +236,7 @@ impl BulletSystem {
                         pos : ship.core.pos + off,
                         team : ship.core.team(),
                         direction : ship.core.direction(),
-                        kind : gun.kind(),
+                        kind : BulletData::LaserBall,
                         lifetime : Duration::from_secs(3),
                         parent,
                     }
@@ -203,7 +248,7 @@ impl BulletSystem {
                         pos : ship.core.pos + off,
                         team : ship.core.team(),
                         direction : ship.core.direction(),
-                        kind : gun.kind(),
+                        kind : BulletData::SpinningLaser,
                         lifetime : Duration::from_secs(1),
                         parent,
                     }
@@ -215,11 +260,35 @@ impl BulletSystem {
                         pos : ship.core.pos + off,
                         team : ship.core.team(),
                         direction : ship.core.direction(),
-                        kind : gun.kind(),
+                        kind : BulletData::LaserBeam,
                         lifetime : Duration::from_secs(3),
                         parent,
                     }
                 )
+            },
+            BulletKind::HomingMissle => {
+                let kind = gun.kind();
+                let direc = ship.core.direction();
+                let mut spawn_bullet = 
+                |direc|
+                    self.spawn(        
+                        Bullet {
+                            pos : ship.core.pos + off,
+                            team : ship.core.team(),
+                            direction : direc,
+                            kind : BulletData::HomingMissle { 
+                                target : None,
+                                align_timer : Bullet::HOMING_MISSLE_ALIGN_TIME,
+                            },
+                            lifetime : Duration::from_secs(3),
+                            parent,
+                        }
+                    )
+                ;
+                spawn_bullet(rotate_vector_angle(direc, std::f32::consts::PI * 0.9f32));
+                spawn_bullet(rotate_vector_angle(direc, -std::f32::consts::PI * 0.9f32));
+                spawn_bullet(rotate_vector_angle(direc, std::f32::consts::PI * 0.7f32));
+                spawn_bullet(rotate_vector_angle(direc, -std::f32::consts::PI * 0.7f32));
             },
         }
     }
@@ -236,9 +305,9 @@ impl BulletSystem {
     }
 
     // FIXME just iterating over all enemies probably sucks.
-    pub fn update<Observer : MutationObserver>(
+    pub fn update(
         &mut self, 
-        c : &mut Observation<Observer>, 
+        c : &mut Observation<MutationObserverPack>, 
         dt : Duration
     ) 
     {
@@ -246,9 +315,10 @@ impl BulletSystem {
         use std_ext::*;
         use crate::collision_models;
 
+        let tracked_ships = &mut self.tracked_ships;
         self.mem.iter_mut()
         .for_each(
-            |bullet| {
+            |(bullet_id, bullet)| {
                 use crate::constants::VECTOR_NORMALIZATION_RANGE;
 
                 debug_assert!((bullet.direction.magnitude() - 1.0f32) < VECTOR_NORMALIZATION_RANGE);
@@ -256,10 +326,10 @@ impl BulletSystem {
                 bullet.lifetime = bullet.lifetime.my_saturating_sub(dt);
 
                 // Update bullet data and damage on collision
-                match bullet.kind {
+                match &mut bullet.kind {
                     // TestBullet's move towards with speed 
                     // equal to 4.0.
-                    BulletKind::TestBullet => {
+                    BulletData::TestBullet => {
                         bullet.pos += (4.0f32 * dt.as_secs_f32()) * bullet.direction;
         
                         let my_body = collision_models::consts::BulletTester.apply_transform(&bullet.transform());
@@ -285,7 +355,7 @@ impl BulletSystem {
                             }
                         )
                     },        
-                    BulletKind::LaserBall => {
+                    BulletData::LaserBall => {
                         bullet.pos += (0.7f32 * dt.as_secs_f32()) * bullet.direction;
         
                         let my_body = collision_models::consts::LaserBall.apply_transform(&bullet.transform());
@@ -311,7 +381,7 @@ impl BulletSystem {
                             }
                         )
                     },
-                    BulletKind::SpinningLaser => {
+                    BulletData::SpinningLaser => {
                         let (parent_pos, parent_direction) = 
                             c.get(bullet.parent)
                             .map(|x| (x.core.pos, x.core.direction()))
@@ -344,7 +414,7 @@ impl BulletSystem {
                             }
                         )
                     },
-                    BulletKind::LaserBeam => {
+                    BulletData::LaserBeam => {
                         let (parent_pos, parent_direction) = 
                             c.get(bullet.parent)
                             .map(|x| (x.core.pos, x.core.direction()))
@@ -376,36 +446,91 @@ impl BulletSystem {
                             }
                         )
                     },
+                    BulletData::HomingMissle { target, align_timer } => {
+                        use std_ext::*;
+
+                        const HOMING_MISSLE_SEE_RANGE : f32 = 2.0f32;
+                        match target {
+                            Some(target) => {
+                                let target = c.get(*target).unwrap().core.pos;
+                                if align_timer.my_is_zero() {
+                                    bullet.direction = (target - bullet.pos).normalize();
+                                } else {
+                                    *align_timer = align_timer.saturating_sub(dt);
+                                    bullet.direction = rotate_towards(bullet.pos, bullet.direction, target, std::f32::consts::TAU * 0.7f32, dt);
+                                }
+                            },
+                            None => { 
+                                let bullet_team = bullet.team;
+                                *target = 
+                                c.observer().square_map
+                                .find_closest(
+                                    c.storage(), 
+                                    bullet.pos, 
+                                    HOMING_MISSLE_SEE_RANGE, 
+                                    |x| x.core.team() != bullet_team
+                                );
+                                if let Some(target) = target {
+                                    tracked_ships.entry(*target)
+                                    .or_insert(HashSet::new())
+                                    .insert(bullet_id);
+                                }
+                            },
+                        }
+                                
+                        if align_timer.my_is_zero() {
+                            bullet.pos += (4.5f32 * dt.as_secs_f32()) * bullet.direction;
+                        } else {
+                            bullet.pos += (1.8f32 * dt.as_secs_f32()) * bullet.direction;
+                        }
+        
+                        let my_body = collision_models::consts::BulletTester.apply_transform(&bullet.transform());
+                        let my_aabb = my_body.aabb();
+
+                        c.mutate_each(
+                            |ship| {
+                                if bullet.lifetime.my_is_zero() { return }
+
+                                let target = &mut ship.core;
+                                let target_body = target.phys_body();
+                                let target_aabb = target_body.aabb();
+            
+                                if 
+                                    target.team() != bullet.team &&
+                                    target.hp() > 0 && 
+                                    target_aabb.collision_test(my_aabb) && 
+                                    target_body.check_collision(&my_body)
+                                {
+                                    target.damage(1);
+                                    bullet.lifetime = <Duration as DurationExt>::my_zero();
+                                } 
+                            }
+                        )
+                    },
                 }
             } 
         );
 
         self.mem.retain(
-            |bullet| {
+            |bullet_id, bullet| {
                 // Determine what is illegal
                 // for the bullet to live
                 match bullet.kind {
-                    BulletKind::TestBullet => !bullet.lifetime.my_is_zero(),
-                    BulletKind::LaserBall => !bullet.lifetime.my_is_zero(),
-                    BulletKind::SpinningLaser => {
-                        //let player_pos = ;
-                        //bullet.pos = 
+                    BulletData::TestBullet | BulletData::LaserBall | 
+                    BulletData::SpinningLaser | BulletData::LaserBeam => {
                         !bullet.lifetime.my_is_zero()
                     },
-                    BulletKind::LaserBeam => {
-                        //let player_pos = ;
-                        //bullet.pos = 
-                        !bullet.lifetime.my_is_zero()
+                    BulletData::HomingMissle { target, .. } => {
+                        if bullet.lifetime.my_is_zero() {
+                            target.map(
+                                |x| 
+                                tracked_ships.get_mut(&x)
+                                .unwrap().remove(&bullet_id)
+                            );
+                            false
+                        } else { true }
                     },
                 }
-            }
-        );
-
-        // Post processing
-        self.mem.iter_mut()
-        .for_each(
-            |_bullet| {
-                // Nothing for now
             }
         );
     }
@@ -423,7 +548,7 @@ impl BulletSystem {
 
         self.mem.iter()
         .enumerate()
-        .for_each(|(i, x)| {
+        .for_each(|(i, (_, x))| {
             let m = x.model_mat();
             //dbg!(i); dbg!(m);
             
@@ -441,5 +566,24 @@ impl BulletSystem {
             
             ptr.set(i, dat);
         });
+    }
+}
+
+impl DeletionObserver for BulletSystem {
+    fn on_delete(&mut self, storage : &mut MutableStorage, idx : usize) {
+        if let 
+            Some(bullets) =
+            self.tracked_ships
+            .remove(&idx)
+        {
+            bullets.into_iter()
+            .for_each(|bullet_id| 
+                match &mut self.mem.get_mut(bullet_id).unwrap().kind {
+                    BulletData::HomingMissle { target, .. } => *target = None,
+                    // TODO a warning
+                    _ => (),
+                }
+            )
+        }
     }
 }

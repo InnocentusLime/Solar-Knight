@@ -30,6 +30,11 @@ pub fn rotate_vector_ox<S : BaseFloat>(v : Vector2<S>, rot : Vector2<S>) -> cgma
 pub fn rotate_vector_oy<S : BaseFloat>(v : Vector2<S>, rot : Vector2<S>) -> cgmath::Vector2<S> {
     rotate_vector_ox(v, vec2(rot.y, -rot.x))
 }
+
+#[inline]
+pub fn rotate_vector_angle<S : BaseFloat>(v : Vector2<S>, angle : S) -> cgmath::Vector2<S> {
+    rotate_vector_ox(v, vec2(angle.cos(), angle.sin()))
+}
    
 /*
 cgmath::vec2(

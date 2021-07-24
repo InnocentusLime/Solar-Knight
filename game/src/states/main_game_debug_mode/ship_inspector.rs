@@ -188,6 +188,7 @@ impl DebugState for ShipInspector {
                 ui.heading(format!("velocity : {}, {}", ship.core.velocity.x, ship.core.velocity.y));
                 ui.heading(format!("force : {}, {}", ship.core.force.x, ship.core.force.y));
                 ui.heading(format!("team : {:?}", ship.core.team()));
+                ui.heading(format!("square_id : {:?}", ship.square_map_node.square_id()));
                 match ship.think {
                     Some(think_id) => 
                         ui.heading(

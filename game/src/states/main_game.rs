@@ -65,6 +65,9 @@ pub struct StateData {
     pub square_map : SquareMap,
     pub phys_sys : PhysicsSystem,
     pub earth : Earth,
+
+    // Quick bodge for the dash
+    dash_countdown : Duration,
 }
 
 impl StateData {
@@ -104,6 +107,8 @@ impl StateData {
                 square_map,
                 phys_sys : PhysicsSystem::new(),
                 storage,
+
+                dash_countdown : <Duration as DurationExt>::my_zero(),
             }
         ;
         GameState::MainGame(me)
@@ -130,6 +135,7 @@ impl StateData {
                     }
                 }
 
+                let dash_countdown = &mut self.dash_countdown;
                 let use_laser = &mut self.use_laser; 
                 let pointer_target = &mut self.pointer_target;
                 self.storage.unlock_mutations(&mut self.square_map)
@@ -140,10 +146,18 @@ impl StateData {
                                 Some(event::VirtualKeyCode::E) => {
                                     *use_laser = !*use_laser;
                                     player.guns.swap(0, 1);
+                                    if *use_laser { println!("Laser arsenal on"); }
+                                    else { println!("Bullet + homing homies arsenal on"); }
                                 },
                                 Some(event::VirtualKeyCode::Key1) => *pointer_target = PointerTarget::None,
                                 Some(event::VirtualKeyCode::Key2) => *pointer_target = PointerTarget::Sun,
                                 Some(event::VirtualKeyCode::Key3) => *pointer_target = PointerTarget::Earth,
+                                Some(event::VirtualKeyCode::Space) => {
+                                    if dash_countdown.my_is_zero() {
+                                        *dash_countdown = Duration::from_secs(3);
+                                        player.engines[1].increase_speed()
+                                    }
+                                },
                                 _ => (),
                             }
                         }
@@ -225,17 +239,30 @@ impl StateData {
                 2
             );
         }
+        
+        if input_tracker.is_key_down(Key::Q) && !self.use_laser {
+            self.bullet_sys.shoot_from_gun(
+                &mut mutation_lock, 
+                0, 
+                3
+            );
+        }
 
         self.earth.update(dt);
         self.phys_sys.update(&mut mutation_lock, dt);
         self.bullet_sys.update(&mut mutation_lock, dt);
         self.attach_sys.update(&mut mutation_lock);
         self.ai_machine.update(&mut mutation_lock, &self.earth, &mut self.bullet_sys, dt);
+        
+        self.dash_countdown = self.dash_countdown.saturating_sub(dt);
+        mutation_lock.mutate(0, |player| {
+            player.engines[1].decrease_speed()
+        });
        
         if let Some(player) = self.storage.get(0) {
             ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);
         } else { panic!("No player!!"); }
-         
+ 
         None
     }
 

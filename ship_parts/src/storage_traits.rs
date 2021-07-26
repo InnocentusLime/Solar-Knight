@@ -1,5 +1,7 @@
 use crate::storage::{ Ship, Storage, MutableStorage };
 
+use cgmath::Point2;
+
 // TODO Generic `GET` function. All systems should modify only
 // their own components when they reply to mutations. Observers
 // shouldn't be able to read each other's components when reacting,
@@ -65,19 +67,30 @@ impl<'a, Observer : DeletionObserver> Observation<'a, Observer> {
 }
 
 impl<'a, Observer : SpawningObserver> Observation<'a, Observer> {
-    pub fn spawn(&mut self, ship : Ship) {
+    pub fn spawn(&mut self, ship : Ship) -> usize {
         let idx = self.me.spawn(ship);
         
         let mut mutator = self.me.mutate();
         self.observer.on_spawn(&mut mutator, idx);
+        idx
     }
     
     // TODO shouldn't exist here.
-    pub fn spawn_template(&mut self, template_id : usize) {
+    pub fn spawn_template(&mut self, template_id : usize) -> usize {
         let idx = self.me.spawn_template(template_id);
         
         let mut mutator = self.me.mutate();
         self.observer.on_spawn(&mut mutator, idx);
+        idx
+    }
+    
+    #[inline]
+    pub fn spawn_template_at(&mut self, template_id : usize, pos : Point2<f32>) -> usize {
+        let idx = self.me.spawn_template_at(template_id, pos);
+        
+        let mut mutator = self.me.mutate();
+        self.observer.on_spawn(&mut mutator, idx);
+        idx
     }
 }
    

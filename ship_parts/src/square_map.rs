@@ -63,9 +63,9 @@ pub struct SquareMap {
 
 impl SquareMap {
     // Size of the square in units
-    const SQUARE_SIDE : f32 = 1.0f32;
-    const SQUARE_MAP_SIDE_COUNT_HALF : usize = 75usize;
-    const SQUARE_MAP_SIDE_COUNT : usize = Self::SQUARE_MAP_SIDE_COUNT_HALF * 2usize;
+    pub const SQUARE_SIDE : f32 = 1.0f32;
+    pub const SQUARE_MAP_SIDE_COUNT_HALF : usize = 75usize;
+    pub const SQUARE_MAP_SIDE_COUNT : usize = Self::SQUARE_MAP_SIDE_COUNT_HALF * 2usize;
 
     pub fn new() -> Self {
         SquareMap {
@@ -152,7 +152,7 @@ impl SquareMap {
         Ok(())
     }
 
-    fn iter_square<'a, Host : SquareMapHost>(host : &'a Host, square : &Square) -> impl Iterator<Item = (usize, &'a Host::Object)> + 'a {
+    fn iter_square_ref<'a, Host : SquareMapHost>(host : &'a Host, square : &Square) -> impl Iterator<Item = (usize, &'a Host::Object)> + 'a {
         use std::iter;
 
         let mut current = square.start;
@@ -167,6 +167,12 @@ impl SquareMap {
             }
         })
     }
+
+    pub fn iter_square<'a, Host : SquareMapHost>(&'a self, host : &'a Host, id : usize) -> impl Iterator<Item = (usize, &'a Host::Object)> + 'a {
+        let square = self.squares.get(id).unwrap();
+        Self::iter_square_ref(host, square)
+    }
+
 
     // TODO test
     pub fn find_closest<Host : SquareMapHost, Filter : Fn(&Host::Object)->bool>(
@@ -190,7 +196,7 @@ impl SquareMap {
             if let Some(square) = Self::get_square(pos + Self::SQUARE_SIDE*vec2(x as f32, y as f32)) {
                 self.squares.get(square)
                 .map(|square| {
-                    Self::iter_square(host, square)
+                    Self::iter_square_ref(host, square)
                     .map(|(id, ship)| (FloatOrd(pos.distance(ship.pos())), id, ship))
                     .filter(|x| x.0 <= range && filter(x.2))
                     .min_by_key(|x| x.0)
@@ -261,5 +267,49 @@ impl SpawningObserver for SquareMap {
 impl DeletionObserver for SquareMap {
     fn on_delete(&mut self, storage : &mut MutableStorage, idx : usize) {
         self.delete(storage, idx).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cgmath::point2;
+
+    #[test]
+    fn get_square_test_x_axis() {
+        for y in 0..SquareMap::SQUARE_MAP_SIDE_COUNT {
+            for x in 0..(SquareMap::SQUARE_MAP_SIDE_COUNT-1) {
+                let (x, y) = 
+                    (
+                        (x as f32) * SquareMap::SQUARE_SIDE + SquareMap::SQUARE_SIDE / 2.0f32 
+                        - (SquareMap::SQUARE_MAP_SIDE_COUNT_HALF as f32) * SquareMap::SQUARE_SIDE,
+                        (y as f32) * SquareMap::SQUARE_SIDE + SquareMap::SQUARE_SIDE / 2.0f32 
+                        - (SquareMap::SQUARE_MAP_SIDE_COUNT_HALF as f32) * SquareMap::SQUARE_SIDE
+                    )
+                ;
+                let sq1 = SquareMap::get_square(point2(x, y)).unwrap();
+                let sq2 = SquareMap::get_square(point2(x + SquareMap::SQUARE_SIDE, y)).unwrap();
+                assert_eq!(sq2, sq1 + 1);
+            }
+        }
+    }
+    
+    #[test]
+    fn get_square_test_y_axis() {
+        for y in 0..(SquareMap::SQUARE_MAP_SIDE_COUNT-1) {
+            for x in 0..(SquareMap::SQUARE_MAP_SIDE_COUNT) {
+                let (x, y) = 
+                    (
+                        (x as f32) * SquareMap::SQUARE_SIDE + SquareMap::SQUARE_SIDE / 2.0f32 
+                        - (SquareMap::SQUARE_MAP_SIDE_COUNT_HALF as f32) * SquareMap::SQUARE_SIDE,
+                        (y as f32) * SquareMap::SQUARE_SIDE + SquareMap::SQUARE_SIDE / 2.0f32 
+                        - (SquareMap::SQUARE_MAP_SIDE_COUNT_HALF as f32) * SquareMap::SQUARE_SIDE
+                    )
+                ;
+                let sq1 = SquareMap::get_square(point2(x, y)).unwrap();
+                let sq2 = SquareMap::get_square(point2(x, y + SquareMap::SQUARE_SIDE)).unwrap();
+                assert_eq!(sq2, sq1 + SquareMap::SQUARE_MAP_SIDE_COUNT);
+            }
+        }
     }
 }

@@ -169,6 +169,14 @@ impl Storage {
     pub(crate) fn spawn_template(&mut self, id : usize) -> usize {
         self.spawn(self.template_table[id].prefab)
     }
+   
+    // TODO migrate to this function
+    #[inline]
+    pub(crate) fn spawn_template_at(&mut self, id : usize, pos : Point2<f32>) -> usize {
+        let mut ship = self.template_table[id].prefab;
+        ship.core.pos = pos;
+        self.spawn(ship)
+    }
 
     #[inline]
     pub fn get(&self, id : usize) -> Option<&Ship> { self.mem.get(id) }

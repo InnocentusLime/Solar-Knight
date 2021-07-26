@@ -13,10 +13,14 @@ fn load_image_from_file<P : AsRef<Path>>(p : P) -> Result<image::RgbaImage, Box<
     trace!("loading texture: \"{}\"", p.as_ref().to_str().unwrap_or("UNPRINTABLE_PATH"));
 
     let img = 
-        match image::open(p) {
+        match image::open(&p) {
             Ok(x) => Some(x.into_rgba8()),
             Err(err) => { 
-                error!("failed to load texture. Error:\n {}\nThe texture will be replaced with \"missing_tex\"", err); 
+                error!(
+                    "failed to load image \"{}\".\nError: {}\nThe image will be replaced with \"missing_tex\"",
+                    p.as_ref().to_str().unwrap_or("UNPRINTABLE_PATH"),
+                    err
+                ); 
                 None 
             },
         }

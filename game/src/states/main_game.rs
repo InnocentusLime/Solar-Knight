@@ -20,7 +20,7 @@ use super::{ GameState, TransitionRequest, main_menu, main_game_debug_mode };
 use std_ext::*;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
-use crate::loaders::texture_load_from_file;
+use loaders::load_texture_from_file;
 
 const SPAWN_RATE : Duration = Duration::from_secs(3);
 
@@ -72,12 +72,12 @@ pub struct StateData {
 
 impl StateData {
     pub fn init(ctx : &mut GraphicsContext, _old : GameState) -> GameState {
-        let sun_texture = texture_load_from_file(&ctx.display, "textures/sun.png").unwrap();
-        let earth_texture = texture_load_from_file(&ctx.display, "textures/earth.png").unwrap();
-        let basic_enemy_ship_texture = texture_load_from_file(&ctx.display, "textures/basic_enemy_ship.png").unwrap();
-        let player_bullet_texture = texture_load_from_file(&ctx.display, "textures/player_bullet.png").unwrap();
+        let sun_texture = load_texture_from_file(&ctx.display, "textures/sun.png").unwrap();
+        let earth_texture = load_texture_from_file(&ctx.display, "textures/earth.png").unwrap();
+        let basic_enemy_ship_texture = load_texture_from_file(&ctx.display, "textures/basic_enemy_ship.png").unwrap();
+        let player_bullet_texture = load_texture_from_file(&ctx.display, "textures/player_bullet.png").unwrap();
         //let player_dash_trace_texture = texture_load_from_file(&ctx.display, "textures/player_dash_trace.png").unwrap();
-        let background_texture = texture_load_from_file(&ctx.display, "textures/background_game.png").unwrap();
+        let background_texture = load_texture_from_file(&ctx.display, "textures/background_game.png").unwrap();
 
         let mut storage = Storage::new();
 

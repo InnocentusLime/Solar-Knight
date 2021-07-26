@@ -6,7 +6,7 @@ use glium::texture::texture2d::Texture2d;
 
 use super::{ GameState, TransitionRequest }; 
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
-use crate::loaders::texture_load_from_file; 
+use loaders::load_texture_from_file; 
 use sys_api::input_tracker::InputTracker;
 use super::main_game;
 
@@ -19,8 +19,8 @@ impl StateData {
     pub fn init(ctx : &mut GraphicsContext, _old : GameState) -> GameState {
         GameState::MainMenu(
             StateData {
-                background_texture : texture_load_from_file(&ctx.display, "textures/background.png").unwrap(), 
-                play_button_texture : texture_load_from_file(&ctx.display, "textures/start_button.png").unwrap(),
+                background_texture : load_texture_from_file(&ctx.display, "textures/background.png").unwrap(), 
+                play_button_texture : load_texture_from_file(&ctx.display, "textures/start_button.png").unwrap(),
             } 
         )
     }

@@ -17,6 +17,7 @@ egui = "0.12.0"
 egui_glium = "0.12.0"
 
 sys_api = { path = "../sys_api" }
+loaders = { path = "../loaders" }
 collision = { path = "../collision" }
 ship_parts = { path = "../ship_parts" }
 std_ext = { path = "../std_ext" }

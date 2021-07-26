@@ -13,6 +13,7 @@ pub struct Image<T> {
     pub data : Vec<Vec<T>>,
 }
 
+// TODO custom indices
 pub struct Atlas<T> {
     pub img_data : HashMap<String, ImageData>,
     pub pixels : Vec<T>,

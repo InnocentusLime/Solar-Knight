@@ -3,7 +3,7 @@ use glium::backend::Facade;
 use glium::texture::{ Texture2d, RawImage2d };
 use std::collections::HashMap;
 
-use crate::pack::{ Atlas, GlyphData };
+use pack::{ Atlas, ImageData };
 
 use sys_api::basic_graphics_data::SpriteData;
 
@@ -15,14 +15,14 @@ struct TextPositioningContext {
 }
 
 pub struct Font {
-    glyph_data : HashMap<char, GlyphData>,
+    glyph_data : HashMap<char, ImageData>,
     texture : Texture2d,
 }
 
 impl Font {
     // 1. Take the set of glyphs
     // 2. pack it, create the texture and init
-    pub fn new<F : Facade>(atlas : Atlas, f : &F) -> Self {
+    pub fn new<F : Facade>(atlas : Atlas<u8>, f : &F) -> Self {
         // FIXME this is porbably bad. I am doing this purely
         // because glium is having problems with getting
         // different formats. I should either fix it or
@@ -31,7 +31,7 @@ impl Font {
         // Waiting for 1.53
         use std::array::IntoIter;
         let img_as_lumalpha : Vec<_> =
-            atlas.luma
+            atlas.pixels
             .into_iter()
             .flat_map(|x| IntoIter::new([x, x, x, x]))
             .collect()
@@ -42,7 +42,7 @@ impl Font {
         let texture = Texture2d::new(f, raw_img).expect("OpenGL failed to allocate texture");
 
         Font {
-            glyph_data : atlas.glyph_data,
+            glyph_data : atlas.img_data.into_iter().map(|(str_ch, dat)| (str_ch.chars().next().unwrap(), dat)).collect(),
             texture,
         }
     }
@@ -73,5 +73,54 @@ impl Font {
         text.chars()
         .for_each(|x| )
         */
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pack::pack;
+    use crate::freetype_wrap::*;
+
+    #[test]
+    fn test_bake_charset() {
+        use core::num::NonZeroU32;
+
+        let lib = Lib::new().unwrap();
+        let face =
+            Face::new(
+                &lib,
+                NonZeroU32::new(0), NonZeroU32::new(48),
+                "fonts/OpenSans-Regular.ttf"
+            ).unwrap()
+        ;
+
+        let arr =
+        [
+            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+            'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+            'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+            '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '+', '=',
+            '[', ']', '{', '}', ':', ';', '\'', '"', ',', '.', '/', '<', '>', '?',
+            '\\', '|', '`', '~'
+        ];
+
+        let input =
+            arr.iter()
+            .map(
+                |ch| {
+                    let glyph =
+                        face.load_char(*ch)
+                        .expect(&format!("Failed to load char `{}`", ch))
+                    ;
+                    (*ch, glyph)
+                }
+            )
+            .collect()
+        ;
+
+        pack(input);
     }
 }

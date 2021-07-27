@@ -304,6 +304,11 @@ impl BulletSystem {
         storage.mutate(parent, |ship| self.shoot_from_gun_ship(ship, parent, gun));
     }
 
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = &Bullet> {
+        self.mem.iter().map(|(_, x)| x)
+    }
+
     // FIXME just iterating over all enemies probably sucks.
     pub fn update(
         &mut self, 
@@ -533,39 +538,6 @@ impl BulletSystem {
                 }
             }
         );
-    }
-
-    pub fn fill_buffer(&self, buff : &mut VertexBuffer<SpriteData>) {
-        let mut ptr = buff.map_write();
-
-        if ptr.len() < PLAYER_BULLET_LIMIT { panic!("Buffer too small"); }
-
-        for i in 0..ptr.len() { 
-            use sys_api::basic_graphics_data::ZEROED_SPRITE_DATA;
-            
-            ptr.set(i, ZEROED_SPRITE_DATA);
-        }
-
-        self.mem.iter()
-        .enumerate()
-        .for_each(|(i, (_, x))| {
-            let m = x.model_mat();
-            //dbg!(i); dbg!(m);
-            
-            let dat =
-                SpriteData {
-                    mat_col1 : m.x.into(),
-                    mat_col2 : m.y.into(),
-                    mat_col3 : m.z.into(),
-                    mat_col4 : m.w.into(),
-                    texture_bottom_left : [0.0f32, 0.0f32],
-                    width_height : [1.0f32, 1.0f32],
-                    color : [1.0f32, 1.0f32, 1.0f32, 1.0f32],
-                }
-            ;
-            
-            ptr.set(i, dat);
-        });
     }
 }
 

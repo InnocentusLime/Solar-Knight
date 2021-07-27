@@ -37,3 +37,10 @@ crate::declare_observers! {
         square_map : crate::square_map::SquareMap,
     },
 }
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PointerTarget {
+    None,
+    Sun,
+    Earth,
+}

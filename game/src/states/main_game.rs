@@ -8,6 +8,7 @@ use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
 use glutin::event::{ MouseButton };
 
+use ship_parts::PointerTarget;
 use ship_parts::earth::Earth;
 use ship_parts::physics::PhysicsSystem;
 use ship_parts::square_map::SquareMap;
@@ -23,36 +24,8 @@ use sys_api::input_tracker::InputTracker;
 use loaders::load_texture_from_file;
 
 const SPAWN_RATE : Duration = Duration::from_secs(3);
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum PointerTarget {
-    None,
-    Sun,
-    Earth,
-}
-    
-#[inline]
-pub fn point_at(from : Point2<f32>, at : Point2<f32>) -> Option<Point2<f32>> {
-    use sys_api::graphics_init::SCREEN_WIDTH;
-
-    let v = at - from;
-    let x = (v.x / v.y.abs()).clamp(-SCREEN_WIDTH, SCREEN_WIDTH);
-    let y = (SCREEN_WIDTH * v.y / v.x.abs()).clamp(-1.0f32, 1.0f32);
-    let pointer_v = vec2(x, y);
-
-    if pointer_v.magnitude2() > v.magnitude2() { None }
-    else { Some(<Point2<f32> as EuclideanSpace>::from_vec(pointer_v)) }
-}
-
+ 
 pub struct StateData {
-    pub sun_texture : Texture2d,
-    pub earth_texture : Texture2d,
-    pub basic_enemy_ship_texture : Texture2d,
-    pub background_texture : Texture2d,
-    pub player_bullet_texture : Texture2d,
-    //player_dash_trace_texture : Texture2d,
-
-
     timer : Duration,
     pointer_target : PointerTarget,
     use_laser : bool,
@@ -72,13 +45,6 @@ pub struct StateData {
 
 impl StateData {
     pub fn init(ctx : &mut GraphicsContext, _old : GameState) -> GameState {
-        let sun_texture = load_texture_from_file(&ctx.display, "textures/sun.png").unwrap();
-        let earth_texture = load_texture_from_file(&ctx.display, "textures/earth.png").unwrap();
-        let basic_enemy_ship_texture = load_texture_from_file(&ctx.display, "textures/basic_enemy_ship.png").unwrap();
-        let player_bullet_texture = load_texture_from_file(&ctx.display, "textures/player_bullet.png").unwrap();
-        //let player_dash_trace_texture = texture_load_from_file(&ctx.display, "textures/player_dash_trace.png").unwrap();
-        let background_texture = load_texture_from_file(&ctx.display, "textures/background_game.png").unwrap();
-
         let mut storage = Storage::new();
 
         let mut square_map = SquareMap::new();
@@ -88,13 +54,6 @@ impl StateData {
                 
         let mut me =
             StateData {
-                sun_texture,
-                background_texture,
-                earth_texture,
-                basic_enemy_ship_texture,
-                player_bullet_texture,
-                //player_dash_trace_texture,
-
                 timer : SPAWN_RATE,
                 earth : Earth::new(),
                 use_laser : false,
@@ -262,100 +221,28 @@ impl StateData {
         if let Some(player) = self.storage.get(0) {
             ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);
         } else { panic!("No player!!"); }
+            
+        match self.pointer_target {
+            PointerTarget::None => (),
+            PointerTarget::Sun => self.render_sys.pointer_target = Point2 { x : 0.0f32, y : 0.0f32 },
+            PointerTarget::Earth => self.render_sys.pointer_target = self.earth.pos(),
+        }
  
         None
     }
 
     pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, targets : &mut RenderTargets, _input_tracker : &InputTracker) {
-        use glium::Surface;
-        use cgmath::Matrix4;
-
-        use sys_api::graphics_utils::{ draw_sprite, draw_instanced_sprite };
-
-        let vp = ctx.build_projection_view_matrix();
-
         // Drawing paralaxed background
-        use sys_api::graphics_init::SCREEN_WIDTH;
-        let cam = -ctx.camera.disp.truncate(); 
-        let picker = vec2((0.2f32 * cam.x / SCREEN_WIDTH) % 1.0f32, (0.2f32 * cam.y) % 1.0f32);
-        draw_sprite(
-            ctx, frame, 
-            Matrix4::one(),
-            (picker.x, picker.y, 1.0f32, 1.0f32),
-            self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
-            Some(ctx.viewport())
-        );
-        let picker = vec2((0.05f32 * cam.x / SCREEN_WIDTH - 0.5f32) % 1.0f32, (0.05f32 * cam.y + 0.03f32) % 1.0f32);
-        draw_sprite(
-            ctx, frame, 
-            Matrix4::one(),
-            (picker.x, picker.y, 1.0f32, 1.0f32),
-            self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
-            Some(ctx.viewport())
-        );
+        self.render_sys.render_background(frame, ctx, targets);
         // Planets 
-        draw_sprite(
-            ctx, frame, 
-            vp * self.earth.model_mat(), 
-            (0.0f32, 0.0f32, 1.0f32, 1.0f32),
-            self.earth_texture.sampled(), 
-            Some(ctx.viewport())
-        );
-        draw_sprite(
-            ctx, frame, 
-            vp * Matrix4::from_nonuniform_scale(0.6f32, 0.6f32, 1.0f32), 
-            (0.0f32, 0.0f32, 1.0f32, 1.0f32),
-            self.sun_texture.sampled(), 
-            Some(ctx.viewport())
-        );
+        self.render_sys.render_planets(frame, ctx, targets, &self.earth);
+        // Bullets
+        self.render_sys.render_bullets(frame, ctx, targets, &self.bullet_sys);
+        // Ships
+        self.render_sys.render_ships(frame, ctx, targets, &self.storage);
 
-        // Orphaning technique
-        // https://stackoverflow.com/questions/43036568/when-should-glinvalidatebufferdata-be-used
-        // https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming
-        // https://community.khronos.org/t/vbos-strangely-slow/60109
-        
-        ctx.bullet_buffer.invalidate();
-        self.bullet_sys.fill_buffer(&mut ctx.bullet_buffer);
-        draw_instanced_sprite(ctx, frame, &ctx.bullet_buffer, vp, self.player_bullet_texture.sampled(), Some(ctx.viewport()));
-
-        self.render_sys
-        .render_ships(
-            frame,
-            ctx,
-            targets,
-            &self.storage
-        );
-
-        let pointer_target = 
-            match self.pointer_target {
-                PointerTarget::None => None,
-                PointerTarget::Sun => Some(Point2 { x : 0.0f32, y : 0.0f32 }),
-                PointerTarget::Earth => Some(self.earth.pos()),
-            }
-        ;
-
-        let pointer = 
-            pointer_target
-            .and_then(
-                |x| 
-                self.storage
-                .get(0)
-                .and_then(|y| point_at(y.core.pos, x))
-            )
-        ;
-
-        match pointer {
-            Some(pointer) => {
-                let model_mat = ctx.proj_mat * Matrix4::from_translation(pointer.to_vec().extend(0.0f32)) * Matrix4::from_nonuniform_scale(0.1f32, 0.1f32, 1.0f32);
-                draw_sprite(
-                    ctx, frame, 
-                    model_mat, 
-                    (0.0f32, 0.0f32, 1.0f32, 1.0f32),
-                    self.basic_enemy_ship_texture.sampled(), 
-                    Some(ctx.viewport())
-                )
-            },
-            None => (),
+        if self.pointer_target != PointerTarget::None {
+            self.render_sys.render_pointer(frame, ctx, targets, &self.storage);
         }
     }
 

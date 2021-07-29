@@ -3,6 +3,7 @@
 // a possibility to `NaN` or `Inf` the vectors which causes the 
 // computations to collapse. This must be fixed.
 
+pub mod player;
 pub mod engine;
 pub mod gun;
 pub mod render;

@@ -8,6 +8,7 @@ use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
 use glutin::event::{ MouseButton };
 
+use ship_parts::player::PlayerManager;
 use ship_parts::PointerTarget;
 use ship_parts::earth::Earth;
 use ship_parts::physics::PhysicsSystem;
@@ -28,9 +29,9 @@ const SPAWN_RATE : Duration = Duration::from_secs(3);
 pub struct StateData {
     timer : Duration,
     pointer_target : PointerTarget,
-    use_laser : bool,
 
     pub storage : Storage,
+    pub player : PlayerManager,
     pub bullet_sys : BulletSystem,
     pub attach_sys : AttachmentSystem,
     pub render_sys : RenderSystem,
@@ -38,9 +39,6 @@ pub struct StateData {
     pub square_map : SquareMap,
     pub phys_sys : PhysicsSystem,
     pub earth : Earth,
-
-    // Quick bodge for the dash
-    dash_countdown : Duration,
 }
 
 impl StateData {
@@ -56,7 +54,6 @@ impl StateData {
             StateData {
                 timer : SPAWN_RATE,
                 earth : Earth::new(),
-                use_laser : false,
 
                 pointer_target : PointerTarget::None,
                 bullet_sys : BulletSystem::new(),
@@ -66,8 +63,7 @@ impl StateData {
                 square_map,
                 phys_sys : PhysicsSystem::new(),
                 storage,
-
-                dash_countdown : <Duration as DurationExt>::my_zero(),
+                player : PlayerManager::new(),
             }
         ;
         GameState::MainGame(me)
@@ -94,29 +90,15 @@ impl StateData {
                     }
                 }
 
-                let dash_countdown = &mut self.dash_countdown;
-                let use_laser = &mut self.use_laser; 
                 let pointer_target = &mut self.pointer_target;
                 self.storage.unlock_mutations(&mut self.square_map)
                 .mutate(0,
                     |player| {
                         if player.core.is_alive() {
                             match virtual_keycode {
-                                Some(event::VirtualKeyCode::E) => {
-                                    *use_laser = !*use_laser;
-                                    player.guns.swap(0, 1);
-                                    if *use_laser { println!("Laser arsenal on"); }
-                                    else { println!("Bullet + homing homies arsenal on"); }
-                                },
                                 Some(event::VirtualKeyCode::Key1) => *pointer_target = PointerTarget::None,
                                 Some(event::VirtualKeyCode::Key2) => *pointer_target = PointerTarget::Sun,
                                 Some(event::VirtualKeyCode::Key3) => *pointer_target = PointerTarget::Earth,
-                                Some(event::VirtualKeyCode::Space) => {
-                                    if dash_countdown.my_is_zero() {
-                                        *dash_countdown = Duration::from_secs(3);
-                                        player.engines[1].increase_speed()
-                                    }
-                                },
                                 _ => (),
                             }
                         }
@@ -126,6 +108,9 @@ impl StateData {
             _ => (),
         }
 
+        let mut lock = self.storage.unlock_mutations(&mut self.square_map);
+        self.player.process_event(&mut lock, input_tracker, event);
+        
         None 
     }
 
@@ -167,57 +152,14 @@ impl StateData {
 
         let mut mutation_lock = self.storage.unlock_mutations(&mut self.square_map);
 
-        mutation_lock
-        .mutate(0, |player| {
-            if player.core.is_alive() {
-                let mouse_pos = input_tracker.mouse_position();
-                if abs_diff_ne!(mouse_pos.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
-                    player.core.set_direction(mouse_pos.normalize());
-                }
-        
-                if input_tracker.is_mouse_button_down(MouseButton::Right) {
-                    player.engines[0].increase_speed()
-                } else {
-                    player.engines[0].decrease_speed()
-                }
-            }
-        });
-                
-        if input_tracker.is_mouse_button_down(MouseButton::Left) {
-            self.bullet_sys.shoot_from_gun(
-                &mut mutation_lock, 
-                0, 
-                0
-            );
-        }
-
-        if input_tracker.is_key_down(Key::Q) && self.use_laser {
-            self.bullet_sys.shoot_from_gun(
-                &mut mutation_lock, 
-                0, 
-                2
-            );
-        }
-        
-        if input_tracker.is_key_down(Key::Q) && !self.use_laser {
-            self.bullet_sys.shoot_from_gun(
-                &mut mutation_lock, 
-                0, 
-                3
-            );
-        }
-
         self.earth.update(dt);
         self.phys_sys.update(&mut mutation_lock, dt);
         self.bullet_sys.update(&mut mutation_lock, dt);
         self.attach_sys.update(&mut mutation_lock);
         self.ai_machine.update(&mut mutation_lock, &self.earth, &mut self.bullet_sys, dt);
+
+        self.player.update(&mut mutation_lock, input_tracker, &mut self.bullet_sys, dt);
         
-        self.dash_countdown = self.dash_countdown.saturating_sub(dt);
-        mutation_lock.mutate(0, |player| {
-            player.engines[1].decrease_speed()
-        });
-       
         if let Some(player) = self.storage.get(0) {
             ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);
         } else { panic!("No player!!"); }

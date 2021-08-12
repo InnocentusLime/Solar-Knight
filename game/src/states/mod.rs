@@ -1,10 +1,8 @@
 use std::time::Duration;
 use std::error::Error as StdError;
 
-use egui::Ui;
 use egui_glium::EguiGlium;
-use glium::{ glutin, Surface, Frame };
-use downcast_rs::{ Downcast, impl_downcast };
+use glium::{ glutin, Frame };
 
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;

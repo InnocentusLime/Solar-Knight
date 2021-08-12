@@ -55,7 +55,6 @@ impl StateData {
     }
 
     pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, _ : &mut RenderTargets, _input_tracker : &InputTracker) {
-        use glium::Surface;
         use cgmath::{ One, Matrix4 };
 
         use sys_api::graphics_utils::draw_sprite;

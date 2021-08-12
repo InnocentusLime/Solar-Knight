@@ -1,62 +1,69 @@
 use std::time::Duration;
 
-use slab::Slab;
-use glium::VertexBuffer;
-use tinyvec::ArrayVec;
-use tinyvec::array_vec;
-use serde::{ Serialize, Deserialize };
-use cgmath::{ Point2, Matrix4, EuclideanSpace, InnerSpace, vec2, abs_diff_ne, abs_diff_eq };
+//use serde::{ Serialize, Deserialize };
 
 use cgmath_ext::rotate_vector_ox;
+use systems::teams::Team;
+use systems::ship_engine::Engines;
+use systems::hp_system::HpInfo;
+use systems::ship_transform::Transform;
+use systems::ship_gun::{ Guns, BulletSystem };
+use systems::systems_core::{ Storage, Observation, MutationObserver, ComponentAccess, get_component, get_component_mut };
 
 use crate::earth::Earth;
-use crate::gun::BulletSystem;
-use crate::storage::{ Ship, Storage };
-use crate::constants::VECTOR_NORMALIZATION_RANGE;
-use crate::storage_traits::{ Observation, MutationObserver };
 
+// TODO Display impl
 #[derive(Clone, Copy, Debug)]
-pub struct RoutineId(pub usize);
+pub enum AiTag {
+    None,
+    Turret,
+    HeavyBody,
+    Fly,
+}
 
 // TODO if everything goes well (all AI routines will be implementable like `turret_ai`, make 
 // `is_target_close` and `is_target_in_sight` to accept `Ship`
 mod ai {
     use std::time::Duration;
-    use crate::storage::{ Ship };
-    use cgmath::{ Vector2, Point2, InnerSpace, vec2 };
+    use cgmath::{ Point2, InnerSpace, vec2 };
     use crate::ai_machine::rotate_vector_ox;
 
+    use super::{ Transform, ComponentAccess, get_component, get_component_mut };
+
     #[inline]
-    pub fn is_target_close(
-        me : Point2<f32>,
+    pub fn is_target_close<Obj : ComponentAccess<Transform>>(
+        obj : &Obj,
         target : Point2<f32>,
         distance : f32,
     ) -> bool {
-        let dir_vec = (target - me).normalize();
+        let pos = get_component::<Transform, _>(obj).pos;
+        let dir_vec = (target - pos).normalize();
         dir_vec.magnitude() <= distance
     }
 
     #[inline]
-    pub fn is_target_in_sight(
-        me : Point2<f32>,
-        direc : Vector2<f32>,
+    pub fn is_target_in_sight<Obj : ComponentAccess<Transform>>(
+        obj : &Obj,
         target : Point2<f32>,
         view_angle : f32,
     ) -> bool {
-        let dir_vec = target - me;
-        let ang = direc.angle(dir_vec);
+        let transform = get_component::<Transform, _>(obj);
+        let dir_vec = target - transform.pos;
+        let ang = transform.direction().angle(dir_vec);
         ang.0.abs() <= view_angle / 2.0f32
     }
 
     #[inline]
-    pub fn rotate_towards(
-        me : &mut Ship,
+    pub fn rotate_towards<Obj : ComponentAccess<Transform>>(
+        obj : &mut Obj,
         target : Point2<f32>,
         angular_speed : f32,
         dt : Duration,
     ) {
-        let dir_vec = (target - me.core.pos).normalize();
-        let ang = me.core.direction().angle(dir_vec);
+        let transform = get_component_mut(obj);
+
+        let dir_vec = (target - transform.pos).normalize();
+        let ang = transform.direction().angle(dir_vec);
 
         if ang.0.abs() > angular_speed * dt.as_secs_f32() {
             let (c, s) =
@@ -66,132 +73,142 @@ mod ai {
                     ((angular_speed * dt.as_secs_f32()).cos(), -(angular_speed * dt.as_secs_f32()).sin())
                 } 
             ;
-            me.core.set_direction(rotate_vector_ox(me.core.direction(), vec2(c, s)));
-        } else { me.core.set_direction(dir_vec); }
+            transform.set_direction(rotate_vector_ox(transform.direction(), vec2(c, s)));
+        } else { transform.set_direction(dir_vec); }
     }
 }
 
-fn turret_ai(
+fn turret_ai<Host, Observer>(
     me : usize,
-    storage : &mut Observation<crate::MutationObserverPack>,
-    earth : &Earth,
-    bullet_sys : &mut crate::gun::BulletSystem,
+    bullet_system : &mut BulletSystem,
+    storage : &mut Observation<Observer, Host>,
+    _earth : &Earth,
     dt : Duration
-) {
-    let target = storage.get(0).unwrap().core.pos;
+) 
+where
+    Host : Storage,
+    Host::Object : ComponentAccess<Transform> + ComponentAccess<Guns> + ComponentAccess<Team>,
+    Observer : MutationObserver<Host>,
+{
+    let target = get_component::<Transform, _>(storage.get(0).unwrap()).pos;
 
-    let (target_close, can_see) = 
-        storage.get(me).map(|x|{
-            let (direc, pos) = (x.core.direction(), x.core.pos);
-            (
-                ai::is_target_close(pos, target, 1.5f32),
-                ai::is_target_in_sight(pos, direc, target, std::f32::consts::TAU / 8.0f32)
-            )
-        }).unwrap()
-    ;
-
-    storage.mutate(me, |ship| {
-        if target_close {
-            if can_see {
-                bullet_sys.shoot_from_gun_ship(ship, me, 0);
-            } else {
-                ai::rotate_towards(ship, target, std::f32::consts::TAU / 4.0f32, dt)
+    storage.mutate(me, |obj, _| {
+        if ai::is_target_close(obj, target, 1.5f32) {
+            if ai::is_target_in_sight(obj, target, std::f32::consts::TAU / 8.0f32) {
+                bullet_system.shoot_from_gun_ship(obj, me, 0);
             }
+            ai::rotate_towards(obj, target, std::f32::consts::TAU / 4.0f32, dt)
         }
     });
 }
 
-fn heavy_body_ai(
+fn heavy_body_ai<Host, Observer>(
     me : usize,
-    storage : &mut Observation<crate::MutationObserverPack>,
+    _bullet_system : &mut BulletSystem,
+    storage : &mut Observation<Observer, Host>,
     earth : &Earth,
-    bullet_sys : &mut crate::gun::BulletSystem,
     dt : Duration
-) {
-    storage.mutate(me, |ship| {
-        ai::rotate_towards(ship, earth.pos(), std::f32::consts::TAU / 16.0, dt)
+) 
+where
+    Host : Storage,
+    Host::Object : ComponentAccess<Transform>,
+    Observer : MutationObserver<Host>,
+{
+    storage.mutate(me, |obj, _| {
+        ai::rotate_towards(obj, earth.pos(), std::f32::consts::TAU / 16.0, dt)
     });
 }
 
-fn fly_ai(
+fn fly_ai<Host, Observer>(
     me : usize,
-    storage : &mut Observation<crate::MutationObserverPack>,
-    earth : &Earth,
-    bullet_sys : &mut crate::gun::BulletSystem,
+    _bullet_system : &mut BulletSystem,
+    storage : &mut Observation<Observer, Host>,
+    _earth : &Earth,
     dt : Duration
-) {
-    let target = storage.get(0).unwrap().core.pos;
+) 
+where
+    Host : Storage,
+    Host::Object : ComponentAccess<Transform> + ComponentAccess<Engines>,
+    Observer : MutationObserver<Host>,
+{
+    let target = get_component::<Transform, _>(storage.get(0).unwrap()).pos;
 
-    storage.mutate(me, |ship| {
-        if ai::is_target_close(ship.core.pos, target, 0.8f32) {
-            ship.engines[0].set_level(1);
-        } else { ship.engines[0].set_level(3); }    
-        ai::rotate_towards(ship, target, std::f32::consts::TAU * 2.0, dt)
+    storage.mutate(me, |obj, _| {
+        if ai::is_target_close(obj, target, 0.8f32) {
+            get_component_mut::<Engines, _>(obj).engines[0].set_level(1);
+        } else { 
+            get_component_mut::<Engines, _>(obj).engines[0].set_level(3); 
+        }
+        ai::rotate_towards(obj, target, std::f32::consts::TAU * 2.0, dt)
     });
 }
-
-// TODO Error codes
-// TODO State for AI (Consider only when the need shows up)
-type AiRoutine = 
-    fn(
-        usize,
-        &mut Observation<crate::MutationObserverPack>,
-        &Earth,
-        &mut crate::gun::BulletSystem,
-        Duration
-    )
-;
 
 //#[derive(Clone, Debug, Serialize, Deserialize)]
 #[derive(Clone)]
-pub struct AiMachine {
-    routines : Vec<(String, AiRoutine)>,
-}
+pub struct AiMachine {}
 
 impl AiMachine {
     pub fn new() -> Self {
-        AiMachine {
-            routines : vec![
-                ("turret AI".to_owned(), turret_ai),
-                ("heavy's body AI".to_owned(), heavy_body_ai),
-                ("fly AI".to_owned(), fly_ai),
-            ],
-        }
+        AiMachine {}
     }
 
-    pub fn get_ai_name(
+    fn update_obj<Host, Observer>(
         &self,
-        id : usize
-    ) -> Option<&String> {
-        self.routines.get(id).map(|x| &x.0)
-    }
-
-    pub fn update(
-        &self, 
-        storage : &mut Observation<crate::MutationObserverPack>, 
+        id : usize,
+        tag : AiTag,
+        storage : &mut Observation<Observer, Host>, 
         earth : &Earth,
         bullet_system : &mut BulletSystem, 
         dt : Duration
-    ) {
+    )
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<Transform> + ComponentAccess<Engines> + ComponentAccess<Guns> + ComponentAccess<Team>,
+        Observer : MutationObserver<Host>,
+    {
+        match tag {
+            AiTag::None => (),
+            AiTag::Turret => turret_ai(id, bullet_system, storage, earth, dt),
+            AiTag::HeavyBody => heavy_body_ai(id, bullet_system, storage, earth, dt),
+            AiTag::Fly => fly_ai(id, bullet_system, storage, earth, dt),
+        }
+    }
+
+    pub fn update<Host, Observer>(
+        &self, 
+        storage : &mut Observation<Observer, Host>, 
+        earth : &Earth,
+        bullet_system : &mut BulletSystem, 
+        dt : Duration
+    ) 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<Transform> + ComponentAccess<Engines> + ComponentAccess<Guns> + ComponentAccess<AiTag> + ComponentAccess<HpInfo> + ComponentAccess<Team>,
+        Observer : MutationObserver<Host>,
+    {
         //TODO read the TODO above `AiRoutine`
         for i in 0..storage.capacity() {
             let (alive, think) = {
                 match storage.get(i) {
-                    Some(ship) => (ship.core.is_alive(), ship.think),
+                    Some(obj) => 
+                        (
+                            get_component::<HpInfo, _>(obj).is_alive(), 
+                            *get_component::<AiTag, _>(obj), 
+                        )
+                    ,
                     None => continue,
                 }
             };
             
             if alive {
-                if let Some(routine_id) = think {
-                    (self.routines[routine_id.0].1)(
-                        i,
-                        storage,
-                        earth,
-                        bullet_system,
-                        dt,
-                    )
-                }
+                self.update_obj(
+                    i,
+                    think,
+                    storage,
+                    earth,
+                    bullet_system,
+                    dt,
+                )
             }
         }
     }

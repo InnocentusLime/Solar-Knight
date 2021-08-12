@@ -1,7 +1,12 @@
-use cgmath_ext::rotate_vector_oy;
-use crate::constants::VECTOR_NORMALIZATION_RANGE;
 use cgmath::{ Vector2, InnerSpace, assert_abs_diff_eq, vec2 };
 use serde::{ Serialize, Deserialize };
+use tinyvec::ArrayVec;
+
+use cgmath_ext::rotate_vector_oy;
+
+use ship_transform::Transform;
+use physics::PhysicsData;
+use systems_core::{ get_component, get_component_mut, ComponentAccess, Storage, MutationObserver, Observation };
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Engine {
@@ -11,6 +16,7 @@ pub struct Engine {
     current_lvl : u16
 }
 
+pub const VECTOR_NORMALIZATION_RANGE : f32 = 0.0001f32;
 impl Engine {
     pub fn new(
         direction : Vector2<f32>,
@@ -46,12 +52,12 @@ impl Engine {
     pub fn set_level(&mut self, level : u16) {
         self.current_lvl = level.min(self.max_lvl);
     }
-    
+
+    /*
     #[inline]
     pub fn update(&mut self, core : &mut crate::core::Core, _dt : std::time::Duration) {
-        let direction = rotate_vector_oy(core.direction(), self.direction);
-        core.force += (self.force_mul * self.current_lvl as f32) * direction;
     }
+    */
 }
 
 impl Default for Engine {
@@ -71,5 +77,46 @@ macro_rules! exponential_decrease_curve {
                 ((curr - end) * frac + end) 
             }
         }
+    }
+}
+
+pub const ENGINE_LIMIT : usize = 5;
+#[derive(Clone, Copy, Debug)]
+pub struct Engines {
+    pub engines : ArrayVec<[Engine; ENGINE_LIMIT]>,
+}
+
+pub struct EngineSystem;
+
+impl EngineSystem {
+    pub fn new() -> Self {
+        EngineSystem
+    }
+
+    fn engine_force(engine : &Engine, dir : Vector2<f32>) -> Vector2<f32> {
+        let direction = rotate_vector_oy(dir, engine.direction);
+        (engine.force_mul * engine.current_lvl as f32) * direction
+    }
+
+    pub fn update<Host, Observer>(
+        &mut self, 
+        observation : &mut Observation<Observer, Host>, 
+    ) 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<PhysicsData> + ComponentAccess<Engines> + ComponentAccess<Transform>,
+        Observer : MutationObserver<Host>,
+    {
+        observation.mutate_each(
+            |obj, _| {
+                let dir = get_component::<Transform, _>(obj).direction();
+                let force = 
+                    get_component::<Engines, _>(obj).engines.iter()
+                    .map(|e| Self::engine_force(e, dir))
+                    .sum()
+                ;
+                get_component_mut::<PhysicsData, _>(obj).force += force;
+            }
+        )
     }
 }

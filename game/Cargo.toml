@@ -22,3 +22,4 @@ collision = { path = "../collision" }
 ship_parts = { path = "../ship_parts" }
 std_ext = { path = "../std_ext" }
 cgmath_ext = { path = "../cgmath_ext" }
+systems = { path = "../systems" }

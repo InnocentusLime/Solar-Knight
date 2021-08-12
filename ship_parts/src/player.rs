@@ -1,8 +1,9 @@
-use crate::storage::Ship;
-use crate::gun::BulletSystem;
-use crate::storage_traits::{ Observation, MutationObserver };
-use crate::constants::VECTOR_NORMALIZATION_RANGE;
-
+use systems::teams::Team;
+use systems::ship_transform::Transform;
+use systems::ship_engine::Engines;
+use systems::hp_system::HpInfo;
+use systems::ship_gun::{ BulletSystem, Guns };
+use systems::systems_core::{ MutationObserver, Observation, Storage, ComponentAccess, get_component_mut, get_component };
 use std::time::Duration;
 use std_ext::*;
 use sys_api::input_tracker::InputTracker;
@@ -25,12 +26,17 @@ impl PlayerManager {
         }
     }
 
-    pub fn process_event<Observer : MutationObserver>(
+    pub fn process_event<Host, Observer>(
         &mut self, 
-        storage : &mut Observation<Observer>,
-        input_tracker : &InputTracker, 
+        storage : &mut Observation<Observer, Host>,
+        _input_tracker : &InputTracker, 
         event : &glutin::event::Event<()>
-    ) {
+    ) 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<Engines> + ComponentAccess<Guns> + ComponentAccess<HpInfo>,
+        Observer : MutationObserver<Host>,
+    {
         match event {
             event::Event::DeviceEvent {
                 event : event::DeviceEvent::Key (
@@ -39,57 +45,61 @@ impl PlayerManager {
                         virtual_keycode,
                         ..
                     }
-                    
                 ),
                 ..
             } => {
-                storage.mutate(0,
-                    |player| {
-                        if player.core.is_alive() {
-                            match virtual_keycode {
-                                Some(event::VirtualKeyCode::E) => {
-                                    self.use_laser = !self.use_laser;
-                                    player.guns.swap(0, 1);
-                                    if self.use_laser { println!("Laser arsenal on"); }
-                                    else { println!("Bullet + homing homies arsenal on"); }
-                                },
-                                Some(event::VirtualKeyCode::Space) => {
-                                    if self.dash_countdown.my_is_zero() {
-                                        self.dash_countdown = Duration::from_secs(3);
-                                        player.engines[1].increase_speed()
-                                    }
-                                },
-                                _ => (),
-                            }
+                storage.mutate(0, |player, _| {
+                    if get_component::<HpInfo, _>(player).is_alive() {
+                        match virtual_keycode {
+                            Some(event::VirtualKeyCode::E) => {
+                                self.use_laser = !self.use_laser;
+                                get_component_mut::<Guns, _>(player).guns.swap(0, 1);
+                                if self.use_laser { println!("Laser arsenal on"); }
+                                else { println!("Bullet + homing homies arsenal on"); }
+                            },
+                            Some(event::VirtualKeyCode::Space) => {
+                                if self.dash_countdown.my_is_zero() {
+                                    self.dash_countdown = Duration::from_secs(3);
+                                    get_component_mut::<Engines, _>(player).engines[1].increase_speed()
+                                }
+                            },
+                            _ => (),
                         }
                     }
-                );
+                });
             },
             _ => ()
         }
     }
     
-    pub fn update<Observer : MutationObserver>(
+    pub fn update<Host, Observer>(
         &mut self, 
-        storage : &mut Observation<Observer>,
+        storage : &mut Observation<Observer, Host>,
         input_tracker : &InputTracker, 
         bullet_sys : &mut BulletSystem, 
         dt : Duration
-    ) {
+    ) 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<Engines> + ComponentAccess<HpInfo> + ComponentAccess<Guns> + ComponentAccess<Transform> + ComponentAccess<Team>,
+        Observer : MutationObserver<Host>,
+    {
         use glutin::event::{ VirtualKeyCode as Key, MouseButton };
-        
+        pub const VECTOR_NORMALIZATION_RANGE : f32 = 0.0001f32;
+
         storage
-        .mutate(0, |player| {
-            if player.core.is_alive() {
+        .mutate(0, |player, _| {
+            if get_component::<HpInfo, _>(player).is_alive() {
                 let mouse_pos = input_tracker.mouse_position();
                 if abs_diff_ne!(mouse_pos.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
-                    player.core.set_direction(mouse_pos.normalize());
+                    get_component_mut::<Transform, _>(player).set_direction(mouse_pos.normalize());
                 }
-        
+       
+                let main_engine = get_component_mut::<Engines, _>(player).engines.get_mut(0).unwrap();
                 if input_tracker.is_mouse_button_down(MouseButton::Right) {
-                    player.engines[0].increase_speed()
+                    main_engine.increase_speed()
                 } else {
-                    player.engines[0].decrease_speed()
+                    main_engine.decrease_speed()
                 }
             }
         });
@@ -117,9 +127,10 @@ impl PlayerManager {
                 3
             );
         }
+        
         self.dash_countdown = self.dash_countdown.saturating_sub(dt);
-        storage.mutate(0, |player| {
-            player.engines[1].decrease_speed()
+        storage.mutate(0, |player, _| {
+            get_component_mut::<Engines, _>(player).engines[1].decrease_speed()
         });
     }
 }

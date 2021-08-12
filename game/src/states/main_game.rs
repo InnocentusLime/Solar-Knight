@@ -1,28 +1,30 @@
 use std::time::Duration;
 
 use egui_glium::EguiGlium;
-use cgmath::abs_diff_ne;
-use cgmath::{ EuclideanSpace, InnerSpace, One, Point2, vec2, point2 };
+use cgmath::{ EuclideanSpace, Point2 };
 use glium::{ glutin, Frame };
-use glium::texture::texture2d::Texture2d;
-use glium::uniforms::SamplerWrapFunction;
-use glutin::event::{ MouseButton };
 
+use systems::systems_core::{ Storage, get_component };
 use ship_parts::player::PlayerManager;
 use ship_parts::PointerTarget;
 use ship_parts::earth::Earth;
-use ship_parts::physics::PhysicsSystem;
-use ship_parts::square_map::SquareMap;
+use systems::ship_transform::Transform;
+use systems::physics::PhysicsSystem;
+use systems::collision_check::CollisionSystem;
+use systems::square_map::SquareMap;
 use ship_parts::ai_machine::AiMachine;
 use ship_parts::render::RenderSystem;
-use ship_parts::constants::VECTOR_NORMALIZATION_RANGE;
-use ship_parts::{ BulletSystem, Team, Storage };
-use ship_parts::attachment::AttachmentSystem;
+use systems::ship_gun::BulletSystem;
+use systems::ship_engine::EngineSystem;
+use systems::hp_system::HpSystem;
+use ship_parts::ship::{ ShipStorage, TemplateTable };
+use systems::ship_attachment::AttachmentSystem;
+use systems::teams::Team;
+use systems::hp_system::HpInfo;
 use super::{ GameState, TransitionRequest, main_menu, main_game_debug_mode };
 use std_ext::*;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 use sys_api::input_tracker::InputTracker;
-use loaders::load_texture_from_file;
 
 const SPAWN_RATE : Duration = Duration::from_secs(3);
  
@@ -30,7 +32,11 @@ pub struct StateData {
     timer : Duration,
     pointer_target : PointerTarget,
 
-    pub storage : Storage,
+    pub templates : TemplateTable,
+
+    pub hp_sys : HpSystem,
+    pub engine_sys : EngineSystem,
+    pub storage : ShipStorage,
     pub player : PlayerManager,
     pub bullet_sys : BulletSystem,
     pub attach_sys : AttachmentSystem,
@@ -38,28 +44,34 @@ pub struct StateData {
     pub ai_machine : AiMachine,
     pub square_map : SquareMap,
     pub phys_sys : PhysicsSystem,
+    pub collision_sys : CollisionSystem,
     pub earth : Earth,
 }
 
 impl StateData {
     pub fn init(ctx : &mut GraphicsContext, _old : GameState) -> GameState {
-        let mut storage = Storage::new();
+        let templates = TemplateTable::new();
+        let mut storage = ShipStorage::new();
 
         let mut square_map = SquareMap::new();
-        storage
-        .unlock_spawning(&mut square_map)
-        .spawn_template(0);
+        templates.spawn_template(0, &mut storage.unlock_spawning(&mut square_map));
                 
-        let mut me =
+        let me =
             StateData {
                 timer : SPAWN_RATE,
                 earth : Earth::new(),
 
                 pointer_target : PointerTarget::None,
+        
+                templates,
+
+                hp_sys : HpSystem::new(),
+                engine_sys : EngineSystem::new(),
                 bullet_sys : BulletSystem::new(),
                 attach_sys : AttachmentSystem::new(),
                 render_sys : RenderSystem::new(ctx),
                 ai_machine : AiMachine::new(),
+                collision_sys : CollisionSystem::new(),
                 square_map,
                 phys_sys : PhysicsSystem::new(),
                 storage,
@@ -92,18 +104,16 @@ impl StateData {
 
                 let pointer_target = &mut self.pointer_target;
                 self.storage.unlock_mutations(&mut self.square_map)
-                .mutate(0,
-                    |player| {
-                        if player.core.is_alive() {
-                            match virtual_keycode {
-                                Some(event::VirtualKeyCode::Key1) => *pointer_target = PointerTarget::None,
-                                Some(event::VirtualKeyCode::Key2) => *pointer_target = PointerTarget::Sun,
-                                Some(event::VirtualKeyCode::Key3) => *pointer_target = PointerTarget::Earth,
-                                _ => (),
-                            }
+                .mutate(0, |player, _| {
+                    if get_component::<HpInfo, _>(player).is_alive() {
+                        match virtual_keycode {
+                            Some(event::VirtualKeyCode::Key1) => *pointer_target = PointerTarget::None,
+                            Some(event::VirtualKeyCode::Key2) => *pointer_target = PointerTarget::Sun,
+                            Some(event::VirtualKeyCode::Key3) => *pointer_target = PointerTarget::Earth,
+                            _ => (),
                         }
                     }
-                );
+                });
             },
             _ => (),
         }
@@ -121,11 +131,9 @@ impl StateData {
         dt : Duration,
         _egui : &mut EguiGlium,
     ) -> Option<TransitionRequest> {
-        use glutin::event::{ VirtualKeyCode as Key };
-
         if let Some(player) = self.storage.get(0) {
-            assert!(player.core.team() == Team::Earth);
-            if !player.core.is_alive() { 
+            //assert!(player.core.team() == Team::Earth);
+            if !get_component::<HpInfo, _>(player).is_alive() { 
                 println!("You have died!");
                 return Some(Box::new(main_menu::StateData::init)); 
             }
@@ -148,20 +156,23 @@ impl StateData {
         }
 
         let mut deletion_lock = self.storage.unlock_deletion(&mut self.square_map, &mut self.attach_sys, &mut self.bullet_sys);
-        deletion_lock.filter(|x| x.core.team() != Team::Earth && x.core.hp() == 0);
+        deletion_lock.retain(|x| *get_component::<Team, _>(x) == Team::Earth || get_component::<HpInfo, _>(x).hp() > 0);
 
         let mut mutation_lock = self.storage.unlock_mutations(&mut self.square_map);
-
+        // Systems
         self.earth.update(dt);
+        self.engine_sys.update(&mut mutation_lock);
         self.phys_sys.update(&mut mutation_lock, dt);
-        self.bullet_sys.update(&mut mutation_lock, dt);
+        self.bullet_sys.update_guns(&mut mutation_lock, dt);
+        self.bullet_sys.update_bullets(&mut mutation_lock, &self.collision_sys, dt);
         self.attach_sys.update(&mut mutation_lock);
         self.ai_machine.update(&mut mutation_lock, &self.earth, &mut self.bullet_sys, dt);
-
+        self.hp_sys.update(&mut mutation_lock);
+        // Plugins
         self.player.update(&mut mutation_lock, input_tracker, &mut self.bullet_sys, dt);
         
         if let Some(player) = self.storage.get(0) {
-            ctx.camera.disp = (-player.core.pos.to_vec()).extend(0.0f32);
+            ctx.camera.disp = (-get_component::<Transform, _>(player).pos.to_vec()).extend(0.0f32);
         } else { panic!("No player!!"); }
             
         match self.pointer_target {
@@ -184,14 +195,7 @@ impl StateData {
         self.render_sys.render_ships(frame, ctx, targets, &self.storage);
 
         if self.pointer_target != PointerTarget::None {
-            self.render_sys.render_pointer(frame, ctx, targets, &self.storage);
-        }
-    }
-
-    pub fn player_pos(&self) -> Point2<f32> {
-        match self.storage.get(0) {
-            Some(p) => p.core.pos,
-            None => point2(0.0f32, 0.0f32),
+            self.render_sys.render_pointer(frame, ctx, targets);
         }
     }
 }

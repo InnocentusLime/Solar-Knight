@@ -6,8 +6,6 @@ use sys_api::input_tracker::InputTracker;
 
 use egui_glium::EguiGlium;
 use glium::{ glutin, Frame };
-use glutin::{ event, event_loop::ControlFlow };
-use egui::{ epaint::ClippedShape, Widget, Sense, Id, Ui };
 
 const SLEEP_FRAMES : u64 = 100;
 
@@ -20,7 +18,7 @@ pub struct StateData {
 }
 
 impl StateData {
-    pub fn init(ctx : &mut GraphicsContext) -> GameState {
+    pub fn init(_ctx : &mut GraphicsContext) -> GameState {
         GameState::Booting(
             StateData {
                 frame_counter : 0,
@@ -60,13 +58,12 @@ impl StateData {
 
     pub fn update(
         &mut self, 
-        ctx : &mut GraphicsContext, 
-        input_tracker : &InputTracker, 
+        _ctx : &mut GraphicsContext, 
+        _input_tracker : &InputTracker, 
         _dt : Duration,
         egui : &mut EguiGlium,
     ) -> Option<TransitionRequest> {
         use super::{ main_menu, testing, main_game };
-        use glutin::event;
 
         if self.frame_counter >= SLEEP_FRAMES {
             return Some(Box::new(main_menu::StateData::init));
@@ -88,5 +85,5 @@ impl StateData {
         state_req
     }
 
-    pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, _targets : &mut RenderTargets, _input_tracker : &InputTracker) {}
+    pub fn render(&self, _frame : &mut Frame, _ctx : &mut GraphicsContext, _targets : &mut RenderTargets, _input_tracker : &InputTracker) {}
 }

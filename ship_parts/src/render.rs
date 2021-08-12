@@ -1,8 +1,4 @@
-use crate::PointerTarget;
-use crate::storage::{ Ship, Storage };
-use crate::core::Team;
 use crate::earth::Earth;
-use crate::gun::BulletSystem;
 use sys_api::basic_graphics_data::SpriteData;
 use sys_api::graphics_init::SpriteDataWriter;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
@@ -12,6 +8,11 @@ use cgmath::{ Point2, Matrix4, One, EuclideanSpace, InnerSpace, vec2 };
 use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
 use serde::{ Serialize, Deserialize };
+
+use systems::teams::Team;
+use systems::ship_transform::Transform;
+use systems::systems_core::{ Storage, ComponentAccess, get_component };
+use systems::ship_gun::BulletSystem;
 
 #[inline]
 fn point_at(from : Point2<f32>, at : Point2<f32>) -> Option<Point2<f32>> {
@@ -77,20 +78,26 @@ impl RenderSystem {
         }
     }
 
-    fn fill_ship_buffer(
+    fn fill_ship_buffer<Obj>(
         &self,
-        me : &Ship,
+        me : &Obj,
         buff : &mut SpriteDataWriter,
-    ) {
-        let m = me.model_mat((0.1f32, 0.1f32));
+    ) 
+    where
+        Obj : ComponentAccess<Transform> + ComponentAccess<Team> + ComponentAccess<RenderInfo>,
+    {
+        let m = get_component::<Transform, _>(me).model_mat((0.1f32, 0.1f32));
         //dbg!(i); dbg!(m);
     
         let color : [f32; 4];
-        if me.core.team() == Team::Hive && !me.render.enemy_base_texture { color = [1.0f32, 0.01f32, 0.01f32, 1.0f32] }
+        if 
+            *get_component::<Team, _>(me) == Team::Hive && 
+            !get_component::<RenderInfo, _>(me).enemy_base_texture 
+        { color = [1.0f32, 0.01f32, 0.01f32, 1.0f32] }
         else { color = [1.0f32; 4] }
            
         let cell = 
-            if me.render.enemy_base_texture {
+            if get_component::<RenderInfo, _>(me).enemy_base_texture {
                 self.ship_atlas_uv.entries["enemy_base"]
             } else {
                 self.ship_atlas_uv.entries["player"]
@@ -112,15 +119,18 @@ impl RenderSystem {
         buff.put(dat);
     }
 
-    pub fn render_ship_debug(
+    pub fn render_ship_debug<Obj>(
         &self, 
         frame : &mut Frame, 
         ctx : &mut GraphicsContext, 
         _targets : &mut RenderTargets,
-        ship : &Ship,
-    ) {
+        ship : &Obj,
+    ) 
+    where
+        Obj : ComponentAccess<Transform> + ComponentAccess<Team> + ComponentAccess<RenderInfo>,
+    {
         use sys_api::graphics_init::SPRITE_DEBUG_LIMIT;
-        use sys_api::graphics_utils::{ draw_sprite, draw_instanced_sprite };
+        use sys_api::graphics_utils::draw_instanced_sprite;
         
         let vp = ctx.build_projection_view_matrix();
         
@@ -144,15 +154,19 @@ impl RenderSystem {
         draw_instanced_sprite(ctx, frame, &ctx.sprite_debug_buffer, vp, self.ship_atlas_texture.sampled(), Some(ctx.viewport()));
     }
 
-    pub fn render_ships(
+    pub fn render_ships<Host>(
         &self, 
         frame : &mut Frame, 
         ctx : &mut GraphicsContext, 
         _targets : &mut RenderTargets,
-        battlefield : &Storage
-    ) {
+        battlefield : &Host
+    ) 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<Transform> + ComponentAccess<Team> + ComponentAccess<RenderInfo>, 
+    {
         use sys_api::graphics_init::ENEMY_LIMIT;
-        use sys_api::graphics_utils::{ draw_sprite, draw_instanced_sprite };
+        use sys_api::graphics_utils::draw_instanced_sprite;
         
         let vp = ctx.build_projection_view_matrix();
         
@@ -170,7 +184,7 @@ impl RenderSystem {
             let mut writer = SpriteDataWriter::new(ptr);
    
             // tester-render
-            battlefield.iter()
+            battlefield
             .for_each(
                 |me| {
                     self.fill_ship_buffer(me, &mut writer)
@@ -187,7 +201,7 @@ impl RenderSystem {
         ctx : &mut GraphicsContext, 
         _targets : &mut RenderTargets,
     ) {
-        use sys_api::graphics_utils::{ draw_sprite, draw_instanced_sprite };
+        use sys_api::graphics_utils::draw_sprite;
         use sys_api::graphics_init::SCREEN_WIDTH;
         
         let cam = -ctx.camera.disp.truncate(); 
@@ -216,7 +230,7 @@ impl RenderSystem {
         _targets : &mut RenderTargets,
         earth : &Earth,
     ) {
-        use sys_api::graphics_utils::{ draw_sprite, draw_instanced_sprite };
+        use sys_api::graphics_utils::draw_sprite;
         let vp = ctx.build_projection_view_matrix();
         
         draw_sprite(
@@ -235,26 +249,18 @@ impl RenderSystem {
         );
     }
 
-    // TODO make it more universal. This might
-    // end up moving `PointerTarget` back into `game`
-    // TODO make the pointer depend on the look position?
     pub fn render_pointer(
         &self, 
         frame : &mut Frame, 
         ctx : &mut GraphicsContext, 
         _targets : &mut RenderTargets,
-        storage : &Storage,
     ) {
-        use sys_api::graphics_utils::{ draw_sprite, draw_instanced_sprite };
+        use sys_api::graphics_utils::draw_sprite;
         
-        let vp = ctx.build_projection_view_matrix();
+        let looker = <Point2<f32> as EuclideanSpace>::from_vec(-ctx.camera.disp.truncate());
         let pointer_target = self.pointer_target;
 
-        let pointer = 
-            storage
-            .get(0)
-            .and_then(|y| point_at(y.core.pos, pointer_target))
-        ;
+        let pointer = point_at(looker, pointer_target);
 
         if let Some(pointer) = pointer {
             let model_mat = 
@@ -280,7 +286,7 @@ impl RenderSystem {
         bullet_sys : &BulletSystem,
     ) {
         use sys_api::graphics_init::PLAYER_BULLET_LIMIT;
-        use sys_api::graphics_utils::{ draw_sprite, draw_instanced_sprite };
+        use sys_api::graphics_utils::draw_instanced_sprite;
         
         let vp = ctx.build_projection_view_matrix();
         

@@ -60,10 +60,10 @@ impl ShipInspector {
     // them into the strings so the data displays correctly in
     // the textboxes
     fn update_ship_strings(&mut self, ship : &Ship) {
-        self.hp = ship.core.hp().to_string();
-        self.mass = ship.core.mass.to_string();
-        self.pos_x = ship.core.pos.x.to_string();
-        self.pos_y = ship.core.pos.y.to_string();
+        self.hp = get_component::<HpInfo, _>(ship).hp().to_string();
+        self.mass = get_component::<PhysicsData, _>(ship).mass.to_string();
+        self.pos_x = get_component::<Transform, _>(ship).pos.x.to_string();
+        self.pos_y = get_component::<Transform, _>(ship).pos.y.to_string();
     }
 
     fn reset_ship_strings(&mut self) {
@@ -101,12 +101,12 @@ impl DebugState for ShipInspector {
     
     fn process_event(
         &mut self,
-        event : &glutin::event::Event<'static, ()>,
-        captured_state : &mut main_game::StateData,
-        ctx : &mut GraphicsContext, 
-        input_tracker : &InputTracker, 
-        pointer_in_ui : bool,
-        look : &mut Point2<f32>,
+        _event : &glutin::event::Event<'static, ()>,
+        _captured_state : &mut main_game::StateData,
+        _ctx : &mut GraphicsContext, 
+        _input_tracker : &InputTracker, 
+        _pointer_in_ui : bool,
+        _look : &mut Point2<f32>,
     ) {
 
     }
@@ -114,11 +114,11 @@ impl DebugState for ShipInspector {
     fn update(
         &mut self,
         captured_state : &mut main_game::StateData,
-        ctx : &mut GraphicsContext, 
-        input_tracker : &InputTracker, 
-        dt : Duration,
+        _ctx : &mut GraphicsContext, 
+        _input_tracker : &InputTracker, 
+        _dt : Duration,
         ui : &mut Ui,
-        pointer_in_ui : bool,
+        _pointer_in_ui : bool,
         look : &mut Point2<f32>,
     ) {
         // Waiting for 1.53
@@ -142,7 +142,7 @@ impl DebugState for ShipInspector {
 
             if egui::Button::new("Jump").ui(ui).clicked() {
                 if let Some(ship) = captured_state.storage.get(*id) {
-                    *look = ship.core.pos;
+                    *look = get_component::<Transform, _>(ship).pos;
                 }
             }
         });
@@ -157,85 +157,76 @@ impl DebugState for ShipInspector {
         
         let id = &mut self.id;
 
-        let ai_machine = &mut captured_state.ai_machine;
         // Printing data about the ship
         captured_state.storage
         .unlock_mutations(&mut captured_state.square_map)
-        .mutate(*id,
-            |ship| {
-                // Editable scalar data
-                egui::Separator::default().horizontal().ui(ui);
+        .mutate(*id, |ship, _| {
+            // Editable scalar data
+            egui::Separator::default().horizontal().ui(ui);
                 
-                let dir = ship.core.direction();
-                input_box(ui, &mut self.mass, &mut ship.core.mass, "mass");
-                input_box(ui, &mut self.hp, unsafe { ship.core.hp_mut() }, "hp");
+            input_box(ui, &mut self.mass, &mut get_component_mut::<PhysicsData, _>(ship).mass, "mass");
+            input_box(ui, &mut self.hp, unsafe { get_component_mut::<HpInfo, _>(ship).hp_mut() }, "hp");
                 
 
-                // Editable non-scalar data
-                egui::Separator::default().horizontal().ui(ui);
+            // Editable non-scalar data
+            egui::Separator::default().horizontal().ui(ui);
+               
+            let transform = get_component_mut::<Transform, _>(ship);
+            input_box_2(ui, &mut self.pos_x, &mut self.pos_y, &mut transform.pos.x, &mut transform.pos.y, "pos");
+            let dir = transform.direction();
+            let mut ang = dir.angle(vec2(0.0f32, 1.0f32)).0;
+            ui.horizontal(|ui| {
+                ui.drag_angle(&mut ang);
+                ui.heading("direction");
+            });
+            transform.set_direction_angle(ang);
                 
-                input_box_2(ui, &mut self.pos_x, &mut self.pos_y, &mut ship.core.pos.x, &mut ship.core.pos.y, "pos");
-                let mut ang = dir.angle(vec2(0.0f32, 1.0f32)).0;
-                ui.horizontal(|ui| {
-                    ui.drag_angle(&mut ang);
-                    ui.heading("direction");
-                });
-                ship.core.set_direction_angle(ang);
+            // Internal (or current uneditable) data
+            egui::Separator::default().horizontal().ui(ui);
                 
-                // Internal (or current uneditable) data
-                egui::Separator::default().horizontal().ui(ui);
-                
-                ui.heading(format!("velocity : {}, {}", ship.core.velocity.x, ship.core.velocity.y));
-                ui.heading(format!("force : {}, {}", ship.core.force.x, ship.core.force.y));
-                ui.heading(format!("team : {:?}", ship.core.team()));
-                ui.heading(format!("square_id : {:?}", ship.square_map_node.square_id()));
-                match ship.think {
-                    Some(think_id) => 
-                        ui.heading(
-                            format!(
-                                "ai_routine : {}", 
-                                ai_machine
-                                .get_ai_name(think_id.0)
-                                .unwrap()
-                            )
-                        )
-                    ,
-                    None => ui.heading("no ai"),
-                };
+            let phys = get_component::<PhysicsData, _>(ship);
+            ui.heading(format!("velocity : {}, {}", phys.velocity.x, phys.velocity.y));
+            ui.heading(format!("force : {}, {}", phys.force.x, phys.force.y));
+            ui.heading(format!("team : {:?}", *get_component::<Team, _>(ship)));
+            ui.heading(format!("square_id : {:?}", get_component::<SquareMapNode, _>(ship).square_id()));
+            ui.heading(format!("ai_routine : {:?}", get_component::<AiTag, _>(ship)));
                                
-                // engines
-                egui::Separator::default().horizontal().ui(ui);
+            // engines
+            egui::Separator::default().horizontal().ui(ui);
 
-                ship.engines.iter()
-                .enumerate()
-                .for_each(
-                    |(id, engine)| {
-                        ui.heading(format!("engine{} : {:?}", id, engine));
-                    }
-                );
+            /*
+            ship.engines.iter()
+            .enumerate()
+            .for_each(
+                |(id, engine)| {
+                    ui.heading(format!("engine{} : {:?}", id, engine));
+                }
+            );
+            */
                         
-                // guns
-                egui::Separator::default().horizontal().ui(ui);
+            // guns
+            egui::Separator::default().horizontal().ui(ui);
 
-                ship.guns.iter()
-                .enumerate()
-                .for_each(
-                    |(id, gun)| {
-                        ui.heading(format!("gun{} : {:?}", id, gun));
-                    }
-                );
-            }
-        ).unwrap_or_else(|| { ui.heading("No ship at this cell"); });
+            /*
+            ship.guns.iter()
+            .enumerate()
+            .for_each(
+                |(id, gun)| {
+                    ui.heading(format!("gun{} : {:?}", id, gun));
+                }
+            );
+            */
+        }).unwrap_or_else(|| { ui.heading("No ship at this cell"); });
     }
 
     fn render(
         &self, 
-        frame : &mut Frame, 
-        captured_state : &main_game::StateData,
-        ctx : &mut GraphicsContext, 
-        targets : &mut RenderTargets, 
-        input_tracker : &InputTracker,
-        pointer_in_ui : bool,
+        _frame : &mut Frame, 
+        _captured_state : &main_game::StateData,
+        _ctx : &mut GraphicsContext, 
+        _targets : &mut RenderTargets, 
+        _input_tracker : &InputTracker,
+        _pointer_in_ui : bool,
     ) {
 
     }

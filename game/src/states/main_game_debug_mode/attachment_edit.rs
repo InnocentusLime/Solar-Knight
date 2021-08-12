@@ -1,5 +1,5 @@
 use super::*;
-use ship_parts::attachment::AttachmentInfo;
+use systems::ship_attachment::AttachmentInfo;
 
 fn input_box<T : FromStr + ToString>(ui : &mut Ui, buffer : &mut String, target : &mut T, header : &'static str) {
     ui.horizontal(
@@ -28,7 +28,7 @@ pub struct AttachmentEdit {
 }
 
 impl AttachmentEdit {
-    pub fn new(captured_state : &main_game::StateData) -> Box<dyn DebugState> {
+    pub fn new(_captured_state : &main_game::StateData) -> Box<dyn DebugState> {
         Box::new(
             AttachmentEdit {
                 info : AttachmentInfo {
@@ -50,12 +50,12 @@ impl DebugState for AttachmentEdit {
     
     fn process_event(
         &mut self,
-        event : &glutin::event::Event<'static, ()>,
-        captured_state : &mut main_game::StateData,
-        ctx : &mut GraphicsContext, 
-        input_tracker : &InputTracker, 
-        pointer_in_ui : bool,
-        look : &mut Point2<f32>,
+        _event : &glutin::event::Event<'static, ()>,
+        _captured_state : &mut main_game::StateData,
+        _ctx : &mut GraphicsContext, 
+        _input_tracker : &InputTracker, 
+        _pointer_in_ui : bool,
+        _look : &mut Point2<f32>,
     ) {
 
     }
@@ -63,12 +63,12 @@ impl DebugState for AttachmentEdit {
     fn update(
         &mut self,
         captured_state : &mut main_game::StateData,
-        ctx : &mut GraphicsContext, 
-        input_tracker : &InputTracker, 
-        dt : Duration,
+        _ctx : &mut GraphicsContext, 
+        _input_tracker : &InputTracker, 
+        _dt : Duration,
         ui : &mut Ui,
-        pointer_in_ui : bool,
-        look : &mut Point2<f32>,
+        _pointer_in_ui : bool,
+        _look : &mut Point2<f32>,
     ) {
         input_box(ui, &mut self.ship_id_buff, &mut self.ship_id, "ship id");
         input_box(ui, &mut self.parent_id_buff, &mut self.info.parent_id, "parent id");
@@ -77,7 +77,7 @@ impl DebugState for AttachmentEdit {
                 (captured_state.storage.get(self.info.parent_id),
                 captured_state.storage.get(self.ship_id))
             {
-                (Some(parent), Some(ship)) => {
+                (Some(_), Some(_)) => {
                     captured_state.attach_sys.add_attachment(self.ship_id, self.info);
                 },
                 (_, _) => {
@@ -91,12 +91,12 @@ impl DebugState for AttachmentEdit {
 
     fn render(
         &self, 
-        frame : &mut Frame, 
-        captured_state : &main_game::StateData,
-        ctx : &mut GraphicsContext, 
-        targets : &mut RenderTargets, 
-        input_tracker : &InputTracker,
-        pointer_in_ui : bool,
+        _frame : &mut Frame, 
+        _captured_state : &main_game::StateData,
+        _ctx : &mut GraphicsContext, 
+        _targets : &mut RenderTargets, 
+        _input_tracker : &InputTracker,
+        _pointer_in_ui : bool,
     ) {
     }
 }

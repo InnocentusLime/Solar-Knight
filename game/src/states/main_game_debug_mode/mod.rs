@@ -5,20 +5,32 @@ use std::error::Error as StdError;
 use super::{ TransitionRequest, GameState };
 
 use egui_glium::EguiGlium;
-use glium::{ Frame, Surface, glutin };
-use glutin::{ event, event_loop::ControlFlow };
-use egui::{ epaint::ClippedShape, Widget, Sense, Id };
-
-use ship_parts::{ Ship, Storage };
+use glium::{ Frame, glutin };
+use glutin::event;
+use egui::Widget;
 
 use std::str::FromStr;
 
 // TODO create a prelude
 pub use egui::Ui;
 pub use super::main_game;
+pub use ship_parts::ship::Ship;
 pub use sys_api::input_tracker::InputTracker;
 pub use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
+pub use systems::systems_core::{ Storage, ComponentAccess, get_component, get_component_mut };
 pub use cgmath::{ EuclideanSpace, InnerSpace, Point2, point2, vec2 };
+pub use systems::{
+    ship_transform::Transform,
+    ship_gun::{ Gun, Guns, BulletKind },
+    ship_engine::{ Engine, Engines },
+    physics::PhysicsData,
+    hp_system::HpInfo,
+    square_map::SquareMapNode,
+    collision_check::CollisionInfo,
+    teams::Team,
+};
+pub use ship_parts::ai_machine::AiTag;
+pub use ship_parts::render::RenderInfo;
 
 mod free_cam;
 mod ship_placement;
@@ -85,7 +97,7 @@ impl StateData {
                 GameState::MainGameDebugMode(
                     StateData {
                         // Basic init
-                        look : captured_state.player_pos(),
+                        look : <Point2<f32> as EuclideanSpace>::from_vec(-ctx.camera.disp.truncate()),
                         states : vec![
                             free_cam::FreeCam::new(&captured_state),
                             ship_placement::ShipPlacement::new(&captured_state),
@@ -106,8 +118,6 @@ impl StateData {
     /// The event processing procedure of the state.
     #[inline]
     pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<'static, ()>) -> Option<TransitionRequest> {
-        use glutin::event;
-
         self.states[self.state_id].process_event(
             event,
             &mut self.captured_state,
@@ -149,7 +159,6 @@ impl StateData {
         egui : &mut EguiGlium,
     ) -> Option<TransitionRequest> {
         use glutin::event::VirtualKeyCode as Key;
-        use sys_api::graphics_init::SCREEN_WIDTH;
  
         let look = &mut self.look;
         let states = &mut self.states;

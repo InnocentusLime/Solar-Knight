@@ -1,0 +1,14 @@
+[package]
+name = "ship_transform"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# crates.io crates
+cgmath = { version = "0.18.0", features = ["serde"]}
+# local crates
+systems_core = { path = "../systems_core" }
+# external crates
+cgmath_ext = { path = "../../../cgmath_ext" }

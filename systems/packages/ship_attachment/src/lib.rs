@@ -1,7 +1,7 @@
 use std::collections::{ HashMap, HashSet };
 
-use crate::storage::MutableStorage;
-use crate::storage_traits::{ DeletionObserver, MutationObserver, Observation };
+use ship_transform::Transform;
+use systems_core::{ DeletionObserver, MutationObserver, Observation, ComponentAccess, Storage, get_component, get_component_mut };
 
 #[derive(Clone, Copy)]
 pub struct AttachmentInfo {
@@ -28,20 +28,25 @@ impl AttachmentSystem {
         }
     }
 
-    pub fn update<Observer : MutationObserver>(
+    pub fn update<Host, Observer>(
         &mut self, 
-        storage : &mut Observation<Observer>,
-    ) {
+        storage : &mut Observation<Observer, Host>,
+    ) 
+    where
+        Host : Storage,
+        Observer : MutationObserver<Host>,
+        Host::Object : ComponentAccess<Transform>,
+    {
         self.subscribers.iter()
         .for_each(
             |(id, attach)| {
                 let parent_pos = {
                     let parent = storage.get(attach.parent_id).unwrap();
-                    parent.core.pos
+                    get_component::<Transform, _>(parent).pos
                 };
                 storage.mutate(*id,
-                |ship| {
-                    ship.core.pos = parent_pos; // + offest.aware_of(parent_direction)
+                |obj, _| {
+                    get_component_mut::<Transform, _>(obj).pos = parent_pos; // + offest.aware_of(parent_direction)
                 });
             }
         )
@@ -55,8 +60,8 @@ impl AttachmentSystem {
     }
 }
 
-impl DeletionObserver for AttachmentSystem {
-    fn on_delete(&mut self, storage : &mut MutableStorage, idx : usize) {
+impl<Host : Storage> DeletionObserver<Host> for AttachmentSystem {
+    fn on_delete(&mut self, _storage : &mut Host, idx : usize) {
         // TODO error codes
         let parent_infos = &mut self.parent_infos;
         let subscribers = &mut self.subscribers;

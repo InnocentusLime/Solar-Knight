@@ -1,10 +1,8 @@
-use super::{ TransitionRequest, GameState, main_game };
+use super::{ TransitionRequest, GameState };
 
 use egui_glium::EguiGlium;
-use glium::{ Frame, Surface, glutin };
-use glutin::{ event, event_loop::ControlFlow };
 use log::trace;
-use egui::epaint::ClippedShape;
+use glium::{ Frame, glutin };
 
 use std::time::Duration;
 
@@ -14,7 +12,7 @@ use sys_api::input_tracker::InputTracker;
 pub struct StateData {}
 
 impl StateData {
-    pub fn init(ctx : &mut GraphicsContext, old : GameState) -> GameState {
+    pub fn init(_ctx : &mut GraphicsContext, _old : GameState) -> GameState {
         trace!("Testing mode entered");
 
         GameState::Testing(
@@ -25,11 +23,7 @@ impl StateData {
 
     /// The event processing procedure of the state.
     #[inline]
-    pub fn process_event(&mut self, ctx : &mut GraphicsContext, input_tracker : &InputTracker, event : &glutin::event::Event<'static, ()>) -> Option<TransitionRequest> {
-        match event {
-            _ => (),
-        }
-
+    pub fn process_event(&mut self, _ctx : &mut GraphicsContext, _input_tracker : &InputTracker, _event : &glutin::event::Event<'static, ()>) -> Option<TransitionRequest> {
         None 
     }
 
@@ -38,9 +32,9 @@ impl StateData {
     #[inline]
     pub fn update(
         &mut self, 
-        ctx : &mut GraphicsContext, 
-        input_tracker : &InputTracker, 
-        dt : Duration,
+        _ctx : &mut GraphicsContext, 
+        _input_tracker : &InputTracker, 
+        _dt : Duration,
         egui : &mut EguiGlium,
     ) -> Option<TransitionRequest> {
         egui::SidePanel::left("my_side_panel", 300.0).show(egui.ctx(), |ui| {
@@ -62,6 +56,6 @@ impl StateData {
     }
 
     #[inline]
-    pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, targets : &mut RenderTargets, input_tracker : &InputTracker) {
+    pub fn render(&self, _frame : &mut Frame, _ctx : &mut GraphicsContext, _targets : &mut RenderTargets, _input_tracker : &InputTracker) {
     }
 }

@@ -1,8 +1,8 @@
 use float_ord::FloatOrd;
 use cgmath::{ MetricSpace, Point2, vec2 };
 
-use crate::storage_traits::*;
-use crate::storage::{ Ship, Storage, MutableStorage };
+use ship_transform::Transform;
+use systems_core::{ get_component, get_component_mut, ComponentAccess, Storage, StorageAccessError, DeletionObserver, SpawningObserver, MutationObserver };
 
 #[derive(Clone, Copy, Debug)]
 pub struct SquareMapNode {
@@ -22,25 +22,6 @@ impl SquareMapNode {
 
     #[inline]
     pub fn square_id(&self) -> usize { self.square_id }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct StorageAccessError;
-
-pub trait SquareMapObject : core::fmt::Debug {
-    fn pos(&self) -> Point2<f32>;
-    fn square_map_node(&self) -> &SquareMapNode;
-    fn square_map_node_mut(&mut self) -> &mut SquareMapNode;
-}
-
-pub trait SquareMapHost {
-    type Object : SquareMapObject;
-
-    fn get(&self, idx : usize) -> Result<&Self::Object, StorageAccessError>;
-}
-
-pub trait SquareMapHostMut : SquareMapHost {
-    fn get_mut(&mut self, idx : usize) -> Result<&mut Self::Object, StorageAccessError>;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -88,24 +69,38 @@ impl SquareMap {
     }
 
     #[inline]
-    fn insert_into_square<Host : SquareMapHostMut>(square_id : usize, square : &mut Square, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> {
+    fn insert_into_square<Host>(square_id : usize, square : &mut Square, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<SquareMapNode>,
+    {
         let next_id = square.start;
         square.start = Some(idx);
 
-        let the_inserted = host.get_mut(idx)?;
-        the_inserted.square_map_node_mut().prev = None;
-        the_inserted.square_map_node_mut().next = next_id;
-        the_inserted.square_map_node_mut().square_id = square_id;
+        let the_inserted = host.get_mut(idx).ok_or(StorageAccessError)?;
+        let () = {
+            let node = get_component_mut::<SquareMapNode, _>(the_inserted);
+            node.prev = None;
+            node.next = next_id;
+            node.square_id = square_id;
+        };
 
         if let Some(next_id) = next_id {
-            host.get_mut(next_id)?.square_map_node_mut().prev = Some(idx);
+            get_component_mut::<SquareMapNode, _>(
+                host.get_mut(next_id)
+                .ok_or(StorageAccessError)?
+            ).prev = Some(idx);
         }
 
         Ok(())
     }
 
-    pub fn insert<Host : SquareMapHostMut>(&mut self, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> {
-        let pos = host.get(idx)?.pos();
+    fn insert<Host>(&mut self, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<SquareMapNode> + ComponentAccess<Transform>,
+    {
+        let pos = get_component::<Transform, _>(host.get(idx).ok_or(StorageAccessError)?).pos;
 
         // TODO error code
         let square_id = Self::get_square(pos).unwrap();
@@ -115,14 +110,23 @@ impl SquareMap {
         Self::insert_into_square(square_id, square, host, idx)
     } 
 
-    pub fn delete<Host : SquareMapHostMut>(&mut self, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> {
+    fn delete<Host>(&mut self, host : &mut Host, idx : usize) -> Result<(), StorageAccessError>
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<SquareMapNode>,
+    {
         let (prev, next, square) = {
-            let node = host.get(idx)?.square_map_node();
+            let node = get_component::<SquareMapNode, _>(host.get(idx).ok_or(StorageAccessError)?);
             (node.prev, node.next, node.square_id)
         };
 
         match prev {
-            Some(prev) => host.get_mut(prev)?.square_map_node_mut().next = next,
+            Some(prev) => 
+                get_component_mut::<SquareMapNode, _>(
+                    host.get_mut(prev)
+                    .ok_or(StorageAccessError)?
+                ).next = next
+            ,
             None => {
                 let square = self.squares.get_mut(square).unwrap();
                 square.start = next;
@@ -130,17 +134,27 @@ impl SquareMap {
         }
 
         if let Some(next) = next {
-            host.get_mut(next)?.square_map_node_mut().prev = prev;
+            get_component_mut::<SquareMapNode, _>(
+                host.get_mut(next)
+                .ok_or(StorageAccessError)?
+            ).prev = prev;
         }
 
         Ok(())
     }
 
-    pub fn update_data<Host : SquareMapHostMut>(&mut self, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> {
+    fn update_data<Host>(&mut self, host : &mut Host, idx : usize) -> Result<(), StorageAccessError> 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<SquareMapNode> + ComponentAccess<Transform>,
+    {
         let (new_square, current_square) = {
-            let obj = host.get(idx)?;
+            let obj = host.get(idx).ok_or(StorageAccessError)?;
             // TODO error code
-            (Self::get_square(obj.pos()).unwrap(), obj.square_map_node().square_id)
+            (
+                Self::get_square(get_component::<Transform, _>(obj).pos).unwrap(), 
+                get_component::<SquareMapNode, _>(obj).square_id
+            )
         };
 
         if new_square != current_square {
@@ -152,7 +166,11 @@ impl SquareMap {
         Ok(())
     }
 
-    fn iter_square_ref<'a, Host : SquareMapHost>(host : &'a Host, square : &Square) -> impl Iterator<Item = (usize, &'a Host::Object)> + 'a {
+    fn iter_square_ref<'a, Host>(host : &'a Host, square : &Square) -> impl Iterator<Item = (usize, &'a Host::Object)> + 'a 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<SquareMapNode>,
+    {
         use std::iter;
 
         let mut current = square.start;
@@ -160,7 +178,7 @@ impl SquareMap {
             match current {
                 Some(id) => {
                     let ship = host.get(id).unwrap();
-                    current = ship.square_map_node().next;
+                    current = get_component::<SquareMapNode, _>(ship).next;
                     Some((id, ship))
                 }
                 None => None,
@@ -168,19 +186,27 @@ impl SquareMap {
         })
     }
 
-    pub fn iter_square<'a, Host : SquareMapHost>(&'a self, host : &'a Host, id : usize) -> impl Iterator<Item = (usize, &'a Host::Object)> + 'a {
+    pub fn iter_square<'a, Host>(&'a self, host : &'a Host, id : usize) -> impl Iterator<Item = (usize, &'a Host::Object)> + 'a 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<SquareMapNode>,
+    {
         let square = self.squares.get(id).unwrap();
         Self::iter_square_ref(host, square)
     }
 
 
     // TODO test
-    pub fn find_closest<Host : SquareMapHost, Filter : Fn(&Host::Object)->bool>(
+    pub fn find_closest<Host, Filter : Fn(&Host::Object)->bool>(
         &self, 
         host : &Host, 
         pos : Point2<f32>, 
         range : f32, filter : Filter
-    ) -> Option<usize> {
+    ) -> Option<usize> 
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<SquareMapNode> + ComponentAccess<Transform>,
+    {
         let depth_limit = (range / Self::SQUARE_SIDE).ceil() as usize;
         let range = FloatOrd(range);
         
@@ -197,7 +223,7 @@ impl SquareMap {
                 self.squares.get(square)
                 .map(|square| {
                     Self::iter_square_ref(host, square)
-                    .map(|(id, ship)| (FloatOrd(pos.distance(ship.pos())), id, ship))
+                    .map(|(id, ship)| (FloatOrd(pos.distance(get_component::<Transform, _>(ship).pos)), id, ship))
                     .filter(|x| x.0 <= range && filter(x.2))
                     .min_by_key(|x| x.0)
                     .map(|(dist, id, _)| {
@@ -224,48 +250,32 @@ impl SquareMap {
     }
 }
 
-impl SquareMapObject for Ship {
-    fn pos(&self) -> cgmath::Point2<f32> { self.core.pos }
-    fn square_map_node(&self) -> &crate::square_map::SquareMapNode { &self.square_map_node }
-    fn square_map_node_mut(&mut self) -> &mut crate::square_map::SquareMapNode { &mut self.square_map_node }
-}
-
-impl SquareMapHost for Storage {
-    type Object = Ship;
-
-    fn get(&self, idx : usize) -> Result<&Self::Object, crate::square_map::StorageAccessError> { 
-        self.get(idx).ok_or(crate::square_map::StorageAccessError)
-    }
-}
-
-impl<'a> SquareMapHost for MutableStorage<'a> {
-    type Object = Ship;
-
-    fn get(&self, idx : usize) -> Result<&Self::Object, crate::square_map::StorageAccessError> { 
-        self.get(idx).ok_or(crate::square_map::StorageAccessError)
-    }
-}
-
-impl<'a> SquareMapHostMut for MutableStorage<'a> {
-    fn get_mut(&mut self, idx : usize) -> Result<&mut Self::Object, crate::square_map::StorageAccessError> {
-        self.get_mut(idx).ok_or(crate::square_map::StorageAccessError)
-    }
-}
-
-impl MutationObserver for SquareMap {
-    fn on_mutation(&mut self, storage : &mut MutableStorage, idx : usize) {
+impl<Host> MutationObserver<Host> for SquareMap 
+where
+    Host : Storage,
+    Host::Object : ComponentAccess<SquareMapNode> + ComponentAccess<Transform>,
+{
+    fn on_mutation(&mut self, storage : &mut Host, idx : usize) {
         self.update_data(storage, idx).unwrap()
     }
 }
 
-impl SpawningObserver for SquareMap {
-    fn on_spawn(&mut self, storage : &mut MutableStorage, idx : usize) {
+impl<Host> SpawningObserver<Host> for SquareMap 
+where
+    Host : Storage,
+    Host::Object : ComponentAccess<SquareMapNode> + ComponentAccess<Transform>,
+{
+    fn on_spawn(&mut self, storage : &mut Host, idx : usize) {
         self.insert(storage, idx).unwrap()
     }
 }
 
-impl DeletionObserver for SquareMap {
-    fn on_delete(&mut self, storage : &mut MutableStorage, idx : usize) {
+impl<Host> DeletionObserver<Host> for SquareMap 
+where
+    Host : Storage,
+    Host::Object : ComponentAccess<SquareMapNode> + ComponentAccess<Transform>,
+{
+    fn on_delete(&mut self, storage : &mut Host, idx : usize) {
         self.delete(storage, idx).unwrap()
     }
 }

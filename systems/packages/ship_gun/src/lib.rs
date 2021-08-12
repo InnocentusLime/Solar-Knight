@@ -2,20 +2,22 @@ use std::time::Duration;
 use std::collections::{ HashMap, HashSet };
 
 use slab::Slab;
-use glium::VertexBuffer;
+use tinyvec::ArrayVec;
 
-use crate::MutationObserverPack;
-use crate::storage::{ Ship, MutableStorage };
-use crate::storage_traits::{ Observation, MutationObserver, DeletionObserver };
-use cgmath_ext::{ rotate_vector_ox, rotate_vector_oy, rotate_vector_angle };
-use super::core::{ Core, Team };
-use sys_api::basic_graphics_data::SpriteData;
-use std_ext::{ collections::memory_chunk::MemoryChunk, duration_ext::* };
+use teams::Team;
+use hp_system::HpInfo;
+use square_map::{ SquareMap, SquareMapNode };
+use collision_check::{ CollisionSystem, CollisionInfo };
+use systems_core::{ ComponentAccess, get_component, get_component_mut, Observation, MutationObserver, DeletionObserver, Storage, SystemAccess, get_system };
+use ship_transform::Transform;
 use sys_api::graphics_init::PLAYER_BULLET_LIMIT;
+use cgmath_ext::{ rotate_vector_ox, rotate_vector_oy, rotate_vector_angle };
+use std_ext::duration_ext::*;
 use cgmath_ext::{ matrix3_from_translation };
 
-use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace, InnerSpace, point2, vec2 };
+use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace, InnerSpace, vec2 };
 
+pub const VECTOR_NORMALIZATION_RANGE : f32 = 0.0001f32;
 pub const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
 
 // TODO macrofied-bullet construction tool
@@ -42,6 +44,8 @@ pub enum BulletData {
     },
 }
 
+// TODO bullets shouldn't be baked into
+// the bullet system
 #[derive(Clone, Copy, Debug)]
 pub struct Bullet {
     pub pos : Point2<f32>,
@@ -138,13 +142,13 @@ impl Gun {
         self.timer.my_is_zero()
     }
             
-    pub fn shoot(&mut self) {
+    fn shoot(&mut self) {
         if self.can_shoot() {
             self.timer = self.recoil;
         }
     }
             
-    pub fn update(&mut self, _core : &mut crate::core::Core, dt : std::time::Duration) {
+    fn update(&mut self, dt : std::time::Duration) {
         self.timer = self.timer.my_saturating_sub(dt);
     }
 }
@@ -158,6 +162,12 @@ impl Default for Gun {
             vec2(0.0f32, 1.0f32)
         )
     }
+}
+
+pub const ENGINE_LIMIT : usize = 5;
+#[derive(Clone, Copy, Debug)]
+pub struct Guns {
+    pub guns : ArrayVec<[Gun; ENGINE_LIMIT]>,
 }
     
 #[inline]
@@ -198,32 +208,42 @@ impl BulletSystem {
         }
     }
 
-    pub fn spawn(&mut self, mut bullet : Bullet) {
+    pub fn spawn(&mut self, bullet : Bullet) {
         self.mem.insert(bullet);
     }
 
-    pub fn shoot_from_gun_ship(
+    // TODO `parent` exists purely because the laser can't work without
+    // it. After bullet rework we can get rid of it and make the API
+    // better in general
+    pub fn shoot_from_gun_ship<Obj>(
         &mut self,
-        ship : &mut Ship,
+        obj : &mut Obj,
         parent : usize,
         gun : usize,
-    ) {
-        let gun = ship.guns.get_mut(gun).unwrap();
+    ) 
+    where
+        Obj : ComponentAccess<Guns> + ComponentAccess<Team> + ComponentAccess<Transform>,
+    {
+        let (shooter_pos, shooter_dir) = {
+            let transform = get_component::<Transform, _>(obj);
+            (transform.pos, transform.direction())
+        }; 
+        let shooter_team = *get_component::<Team, _>(obj);
 
-        let off = rotate_vector_oy(ship.core.direction(), gun.offset);
-        let bullet_dir = rotate_vector_oy(ship.core.direction(), gun.direction);
+        let gun = get_component_mut::<Guns, _>(obj).guns.get_mut(gun).unwrap();
 
-        if !gun.can_shoot() { return; }
+        let off = rotate_vector_oy(shooter_dir, gun.offset);
+        let bullet_dir = rotate_vector_oy(shooter_dir, gun.direction);
 
-        gun.shoot();
+        if !gun.can_shoot() { return; }; gun.shoot();
 
         match gun.kind() {
             BulletKind::TestBullet => {
                 self.spawn(        
                     Bullet {
-                        pos : ship.core.pos + off,
-                        team : ship.core.team(),
-                        direction : ship.core.direction(),
+                        pos : shooter_pos + off,
+                        team : shooter_team,
+                        direction : bullet_dir,
                         kind : BulletData::TestBullet,
                         lifetime : Duration::from_secs(3),
                         parent,
@@ -233,9 +253,9 @@ impl BulletSystem {
             BulletKind::LaserBall => {
                 self.spawn(        
                     Bullet {
-                        pos : ship.core.pos + off,
-                        team : ship.core.team(),
-                        direction : ship.core.direction(),
+                        pos : shooter_pos + off,
+                        team : shooter_team,
+                        direction : bullet_dir,
                         kind : BulletData::LaserBall,
                         lifetime : Duration::from_secs(3),
                         parent,
@@ -245,9 +265,9 @@ impl BulletSystem {
             BulletKind::SpinningLaser => {
                 self.spawn(        
                     Bullet {
-                        pos : ship.core.pos + off,
-                        team : ship.core.team(),
-                        direction : ship.core.direction(),
+                        pos : shooter_pos + off,
+                        team : shooter_team,
+                        direction : bullet_dir,
                         kind : BulletData::SpinningLaser,
                         lifetime : Duration::from_secs(1),
                         parent,
@@ -257,9 +277,9 @@ impl BulletSystem {
             BulletKind::LaserBeam => {
                 self.spawn(        
                     Bullet {
-                        pos : ship.core.pos + off,
-                        team : ship.core.team(),
-                        direction : ship.core.direction(),
+                        pos : shooter_pos + off,
+                        team : shooter_team,
+                        direction : bullet_dir,
                         kind : BulletData::LaserBeam,
                         lifetime : Duration::from_secs(3),
                         parent,
@@ -267,14 +287,12 @@ impl BulletSystem {
                 )
             },
             BulletKind::HomingMissle => {
-                let kind = gun.kind();
-                let direc = ship.core.direction();
                 let mut spawn_bullet = 
                 |direc|
                     self.spawn(        
                         Bullet {
-                            pos : ship.core.pos + off,
-                            team : ship.core.team(),
+                            pos : shooter_pos + off,
+                            team : shooter_team,
                             direction : direc,
                             kind : BulletData::HomingMissle { 
                                 target : None,
@@ -285,23 +303,28 @@ impl BulletSystem {
                         }
                     )
                 ;
-                spawn_bullet(rotate_vector_angle(direc, std::f32::consts::PI * 0.9f32));
-                spawn_bullet(rotate_vector_angle(direc, -std::f32::consts::PI * 0.9f32));
-                spawn_bullet(rotate_vector_angle(direc, std::f32::consts::PI * 0.7f32));
-                spawn_bullet(rotate_vector_angle(direc, -std::f32::consts::PI * 0.7f32));
+                spawn_bullet(rotate_vector_angle(shooter_dir, std::f32::consts::PI * 0.9f32));
+                spawn_bullet(rotate_vector_angle(shooter_dir, -std::f32::consts::PI * 0.9f32));
+                spawn_bullet(rotate_vector_angle(shooter_dir, std::f32::consts::PI * 0.7f32));
+                spawn_bullet(rotate_vector_angle(shooter_dir, -std::f32::consts::PI * 0.7f32));
             },
         }
     }
 
     // TODO return an error code
-    #[inline]
-    pub fn shoot_from_gun<Observer : MutationObserver>(
+    #[inline(always)]
+    pub fn shoot_from_gun<S, Observer>(
         &mut self,
-        storage : &mut Observation<Observer>,
+        storage : &mut Observation<Observer, S>,
         parent : usize,
         gun : usize,
-    ) {
-        storage.mutate(parent, |ship| self.shoot_from_gun_ship(ship, parent, gun));
+    ) 
+    where
+        S : Storage,
+        S::Object : ComponentAccess<Transform> + ComponentAccess<Guns> + ComponentAccess<Team>,
+        Observer : MutationObserver<S>,
+    {
+        storage.mutate(parent, |obj, _| self.shoot_from_gun_ship(obj, parent, gun));
     }
 
     #[inline]
@@ -309,23 +332,47 @@ impl BulletSystem {
         self.mem.iter().map(|(_, x)| x)
     }
 
-    // FIXME just iterating over all enemies probably sucks.
-    pub fn update(
+    pub fn update_guns<S, Observer>(
         &mut self, 
-        c : &mut Observation<MutationObserverPack>, 
+        c : &mut Observation<Observer, S>, 
         dt : Duration
-    ) 
+    )
+    where
+        S : Storage,
+        S::Object : ComponentAccess<Guns>,
+        Observer : MutationObserver<S>,
+    {
+        c.mutate_each(
+            |obj, _| 
+            get_component_mut::<Guns, _>(obj).guns
+            .iter_mut().for_each(|g| g.update(dt))
+        )
+    }
+
+    // FIXME just iterating over all enemies probably sucks.
+    pub fn update_bullets<S, Observer>(
+        &mut self, 
+        c : &mut Observation<Observer, S>,
+        collision : &CollisionSystem,
+        dt : Duration
+    )
+    where
+        S : Storage,
+        S::Object : 
+            ComponentAccess<CollisionInfo> + ComponentAccess<Transform> + 
+            ComponentAccess<Team> + ComponentAccess<SquareMapNode> + 
+            ComponentAccess<HpInfo>
+        ,
+        Observer : MutationObserver<S> + SystemAccess<SquareMap>,
     {
         use collision::*;
         use std_ext::*;
-        use crate::collision_models;
+        use collision_check::consts::{ BulletTester, LaserBall, LaserBeam };
 
         let tracked_ships = &mut self.tracked_ships;
         self.mem.iter_mut()
         .for_each(
             |(bullet_id, bullet)| {
-                use crate::constants::VECTOR_NORMALIZATION_RANGE;
-
                 debug_assert!((bullet.direction.magnitude() - 1.0f32) < VECTOR_NORMALIZATION_RANGE);
 
                 bullet.lifetime = bullet.lifetime.my_saturating_sub(dt);
@@ -337,24 +384,20 @@ impl BulletSystem {
                     BulletData::TestBullet => {
                         bullet.pos += (4.0f32 * dt.as_secs_f32()) * bullet.direction;
         
-                        let my_body = collision_models::consts::BulletTester.apply_transform(&bullet.transform());
-                        let my_aabb = my_body.aabb();
+                        let my_body = BulletTester.apply_transform(&bullet.transform());
+                        //let my_aabb = my_body.aabb();
 
                         c.mutate_each(
-                            |ship| {
+                            |obj, _| {
                                 if bullet.lifetime.my_is_zero() { return }
-
-                                let target = &mut ship.core;
-                                let target_body = target.phys_body();
-                                let target_aabb = target_body.aabb();
             
                                 if 
-                                    target.team() != bullet.team &&
-                                    target.hp() > 0 && 
-                                    target_aabb.collision_test(my_aabb) && 
-                                    target_body.check_collision(&my_body)
+                                    *get_component::<Team, _>(obj) != bullet.team &&
+                                    get_component::<HpInfo, _>(obj).is_alive() &&
+                                    //target_aabb.collision_test(my_aabb) && 
+                                    collision.check(obj, &my_body)
                                 {
-                                    target.damage(1);
+                                    get_component_mut::<HpInfo, _>(obj).damage(1);
                                     bullet.lifetime = <Duration as DurationExt>::my_zero();
                                 } 
                             }
@@ -363,58 +406,49 @@ impl BulletSystem {
                     BulletData::LaserBall => {
                         bullet.pos += (0.7f32 * dt.as_secs_f32()) * bullet.direction;
         
-                        let my_body = collision_models::consts::LaserBall.apply_transform(&bullet.transform());
-                        let my_aabb = my_body.aabb();
+                        let my_body = LaserBall.apply_transform(&bullet.transform());
+                        //let my_aabb = my_body.aabb();
 
                         c.mutate_each(
-                            |ship| {
+                            |obj, _| {
                                 if bullet.lifetime.my_is_zero() { return }
 
-                                let target = &mut ship.core;
-                                let target_body = target.phys_body();
-                                let target_aabb = target_body.aabb();
-            
                                 if 
-                                    target.team() != bullet.team &&
-                                    target.hp() > 0 && 
-                                    target_aabb.collision_test(my_aabb) && 
-                                    target_body.check_collision(&my_body)
+                                    *get_component::<Team, _>(obj) != bullet.team &&
+                                    get_component::<HpInfo, _>(obj).is_alive() &&
+                                    //target_aabb.collision_test(my_aabb) && 
+                                    collision.check(obj, &my_body)
                                 {
-                                    target.damage(1);
+                                    get_component_mut::<HpInfo, _>(obj).damage(1);
                                     bullet.lifetime = <Duration as DurationExt>::my_zero();
                                 } 
                             }
                         )
                     },
                     BulletData::SpinningLaser => {
-                        let (parent_pos, parent_direction) = 
+                        let parent_pos = 
                             c.get(bullet.parent)
-                            .map(|x| (x.core.pos, x.core.direction()))
+                            .map(|obj| get_component::<Transform, _>(obj).pos)
                             .unwrap()
                         ;
                         bullet.pos = parent_pos;
                         let (sin, cos) = (std::f32::consts::TAU * dt.as_secs_f32()).sin_cos();
                         bullet.direction = rotate_vector_ox(bullet.direction, vec2(cos, sin));
                         
-                        let my_body = collision_models::consts::LaserBeam.apply_transform(&bullet.transform());
-                        let my_aabb = my_body.aabb();
+                        let my_body = LaserBeam.apply_transform(&bullet.transform());
+                        //let my_aabb = my_body.aabb();
 
                         c.mutate_each(
-                            |ship| {
+                            |obj, _| {
                                 if bullet.lifetime.my_is_zero() { return }
-
-                                let target = &mut ship.core;
-                                let target_body = target.phys_body();
-                                let target_aabb = target_body.aabb();
             
                                 if 
-                                    target.team() != bullet.team &&
-                                    target.hp() > 0 && 
-                                    target_aabb.collision_test(my_aabb) && 
-                                    target_body.check_collision(&my_body)
+                                    *get_component::<Team, _>(obj) != bullet.team &&
+                                    get_component::<HpInfo, _>(obj).is_alive() &&
+                                    //target_aabb.collision_test(my_aabb) && 
+                                    collision.check(obj, &my_body)
                                 {
-                                    target.damage(1);
-                                    //bullet.lifetime = <Duration as DurationExt>::my_zero();
+                                    get_component_mut::<HpInfo, _>(obj).damage(1);
                                 } 
                             }
                         )
@@ -422,31 +456,28 @@ impl BulletSystem {
                     BulletData::LaserBeam => {
                         let (parent_pos, parent_direction) = 
                             c.get(bullet.parent)
-                            .map(|x| (x.core.pos, x.core.direction()))
-                            .unwrap()
+                            .map(|obj| {
+                                let transform = get_component::<Transform, _>(obj);
+                                (transform.pos, transform.direction()) 
+                            }).unwrap()
                         ;
                         bullet.pos = parent_pos;
                         bullet.direction = parent_direction;
                         
-                        let my_body = collision_models::consts::LaserBeam.apply_transform(&bullet.transform());
-                        let my_aabb = my_body.aabb();
+                        let my_body = LaserBeam.apply_transform(&bullet.transform());
+                        //let my_aabb = my_body.aabb();
 
                         c.mutate_each(
-                            |ship| {
+                            |obj, _| {
                                 if bullet.lifetime.my_is_zero() { return }
-
-                                let target = &mut ship.core;
-                                let target_body = target.phys_body();
-                                let target_aabb = target_body.aabb();
             
                                 if 
-                                    target.team() != bullet.team &&
-                                    target.hp() > 0 && 
-                                    target_aabb.collision_test(my_aabb) && 
-                                    target_body.check_collision(&my_body)
+                                    *get_component::<Team, _>(obj) != bullet.team &&
+                                    get_component::<HpInfo, _>(obj).is_alive() &&
+                                    //target_aabb.collision_test(my_aabb) && 
+                                    collision.check(obj, &my_body)
                                 {
-                                    target.damage(1);
-                                    //bullet.lifetime = <Duration as DurationExt>::my_zero();
+                                    get_component_mut::<HpInfo, _>(obj).damage(1);
                                 } 
                             }
                         )
@@ -457,7 +488,12 @@ impl BulletSystem {
                         const HOMING_MISSLE_SEE_RANGE : f32 = 2.0f32;
                         match target {
                             Some(target) => {
-                                let target = c.get(*target).unwrap().core.pos;
+                                let target = 
+                                    get_component::<Transform, _>(
+                                        c.get(*target)
+                                        .unwrap()
+                                    ).pos
+                                ;
                                 if align_timer.my_is_zero() {
                                     bullet.direction = (target - bullet.pos).normalize();
                                 } else {
@@ -468,13 +504,15 @@ impl BulletSystem {
                             None => { 
                                 let bullet_team = bullet.team;
                                 *target = 
-                                c.observer().square_map
-                                .find_closest(
-                                    c.storage(), 
-                                    bullet.pos, 
-                                    HOMING_MISSLE_SEE_RANGE, 
-                                    |x| x.core.team() != bullet_team
-                                );
+                                    get_system::<SquareMap, _>(&c.observer)
+                                    .find_closest(
+                                        c.storage(), 
+                                        bullet.pos, 
+                                        HOMING_MISSLE_SEE_RANGE, 
+                                        |x| *get_component::<Team, _>(x) != bullet_team
+                                    )
+                                ;
+
                                 if let Some(target) = target {
                                     tracked_ships.entry(*target)
                                     .or_insert(HashSet::new())
@@ -489,24 +527,20 @@ impl BulletSystem {
                             bullet.pos += (1.8f32 * dt.as_secs_f32()) * bullet.direction;
                         }
         
-                        let my_body = collision_models::consts::BulletTester.apply_transform(&bullet.transform());
-                        let my_aabb = my_body.aabb();
+                        let my_body = BulletTester.apply_transform(&bullet.transform());
+                        //let my_aabb = my_body.aabb();
 
                         c.mutate_each(
-                            |ship| {
+                            |obj, _| {
                                 if bullet.lifetime.my_is_zero() { return }
 
-                                let target = &mut ship.core;
-                                let target_body = target.phys_body();
-                                let target_aabb = target_body.aabb();
-            
                                 if 
-                                    target.team() != bullet.team &&
-                                    target.hp() > 0 && 
-                                    target_aabb.collision_test(my_aabb) && 
-                                    target_body.check_collision(&my_body)
+                                    *get_component::<Team, _>(obj) != bullet.team &&
+                                    get_component::<HpInfo, _>(obj).is_alive() &&
+                                    //target_aabb.collision_test(my_aabb) && 
+                                    collision.check(obj, &my_body)
                                 {
-                                    target.damage(1);
+                                    get_component_mut::<HpInfo, _>(obj).damage(1);
                                     bullet.lifetime = <Duration as DurationExt>::my_zero();
                                 } 
                             }
@@ -541,8 +575,8 @@ impl BulletSystem {
     }
 }
 
-impl DeletionObserver for BulletSystem {
-    fn on_delete(&mut self, storage : &mut MutableStorage, idx : usize) {
+impl<S : Storage> DeletionObserver<S> for BulletSystem {
+    fn on_delete(&mut self, _storage : &mut S, idx : usize) {
         if let 
             Some(bullets) =
             self.tracked_ships

@@ -1,6 +1,6 @@
 use cgmath::{ Matrix3, EuclideanSpace };
 
-use collision::{ Collision, declare_bodies };
+use collision::{ ComputeAxisAlignedBoundingBox, AxisAlignedBoundingBox, Collision, declare_bodies };
 use cgmath_ext::matrix3_from_translation;
 
 use ship_transform::Transform;
@@ -73,5 +73,14 @@ impl CollisionSystem {
         let collision_info = get_component::<CollisionInfo, _>(obj);
         let transform = get_component::<Transform, _>(obj);
         collision_info.phys_body(transform).check_collision(other)
+    }
+
+    pub fn get_aabb<Obj>(&self, obj : &Obj) -> AxisAlignedBoundingBox 
+    where
+        Obj : ComponentAccess<Transform> + ComponentAccess<CollisionInfo>,
+    {
+        let collision_info = get_component::<CollisionInfo, _>(obj);
+        let transform = get_component::<Transform, _>(obj);
+        collision_info.phys_body(transform).aabb()
     }
 }

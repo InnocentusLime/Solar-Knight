@@ -18,7 +18,7 @@ fn input_box<T : FromStr + ToString>(ui : &mut Ui, buffer : &mut String, target 
             egui::TextEdit::singleline(buffer)
             .desired_width(50.0f32)
             .ui(ui)
-            .lost_focus() 
+            .enabled() 
         {
             if let Ok(new_target) = buffer.trim().parse() { *target = new_target; }
             else { *buffer = target.to_string() }
@@ -35,7 +35,7 @@ fn input_box_2<T : FromStr + ToString>(ui : &mut Ui, buffer1 : &mut String, buff
             egui::TextEdit::singleline(buffer1)
             .desired_width(50.0f32)
             .ui(ui)
-            .lost_focus() 
+            .enabled() 
         {
             if let Ok(new_target) = buffer1.trim().parse() { *target1 = new_target; }
             else { *buffer1 = target1.to_string() }
@@ -45,7 +45,7 @@ fn input_box_2<T : FromStr + ToString>(ui : &mut Ui, buffer1 : &mut String, buff
             egui::TextEdit::singleline(buffer2)
             .desired_width(50.0f32)
             .ui(ui)
-            .lost_focus() 
+            .enabled() 
         {
             if let Ok(new_target) = buffer2.trim().parse() { *target2 = new_target; }
             else { *buffer2 = target2.to_string() }
@@ -71,6 +71,18 @@ impl ShipInspector {
         self.mass = "".to_string();
         self.pos_x = "".to_string();
         self.pos_y = "".to_string();
+    }
+
+    fn pick_new_ship(&mut self, storage : &ShipStorage, id : usize) {
+        if id != self.id { 
+            self.input = id.to_string();
+            if let Some(ship) = storage.get(id) {
+                self.update_ship_strings(ship);
+            } else {
+                self.reset_ship_strings();
+            }
+        }
+        self.id = id;
     }
 
     pub fn new(captured_state : &main_game::StateData) -> Box<dyn DebugState> {
@@ -101,14 +113,64 @@ impl DebugState for ShipInspector {
     
     fn process_event(
         &mut self,
-        _event : &glutin::event::Event<'static, ()>,
-        _captured_state : &mut main_game::StateData,
+        event : &glutin::event::Event<'static, ()>,
+        captured_state : &mut main_game::StateData,
         _ctx : &mut GraphicsContext, 
-        _input_tracker : &InputTracker, 
-        _pointer_in_ui : bool,
-        _look : &mut Point2<f32>,
+        input_tracker : &InputTracker, 
+        pointer_in_ui : bool,
+        look : &mut Point2<f32>,
     ) {
+        match event {
+            event::Event::WindowEvent { event, .. } => {
+                match event {
+                    event::WindowEvent::MouseInput {
+                        state,
+                        button,
+                        ..
+                    } => {
+                        if *button == event::MouseButton::Left && *state == event::ElementState::Pressed && !pointer_in_ui {
+                            /*
+                                algorithm:
+                                1. remember the first obj on the candidate list
+                                2. skip objects before we reach the one that is currently picked
+                                3. if there's an object to take after the skip, take it. Otherwise,
+                                reset to the first one
+                            */
+                            let click_pos = *look + input_tracker.mouse_position();
+                            //println!("Clicked at {:?}", click_pos);
+                            let mut iter = 
+                                captured_state.square_map
+                                .iter_zone(
+                                    &captured_state.storage,
+                                    click_pos,
+                                    1.0f32,
+                                )
+                                .filter(|(_, obj)|
+                                    captured_state.collision_sys
+                                    .get_aabb(*obj)
+                                    .point_inside(click_pos)
+                                )
+                                .map(|(idx, _)| idx)
+                                .peekable()
+                            ;
+                            
+                            let mut cand = self.id;
+                            if let Some(first) = iter.peek() {
+                                cand = *first;
 
+                                let mut skipped = iter.skip_while(|idx| *idx != self.id);
+                                skipped.next();
+                                if let Some(better_cand) = skipped.next() { cand = better_cand; }
+                            }
+        
+                            self.pick_new_ship(&captured_state.storage, cand);
+                        }
+                    },
+                    _ => (),
+                }
+            },
+            _ => (),
+        }
     }
 
     fn update(
@@ -121,40 +183,21 @@ impl DebugState for ShipInspector {
         _pointer_in_ui : bool,
         look : &mut Point2<f32>,
     ) {
-        // Waiting for 1.53
-        let old_id = self.id;
-        let input = &mut self.input;
-        let id = &mut self.id;
+        let mut id = self.input.trim().parse().unwrap_or(0);
 
         ui.horizontal(
         |ui| {
-            // Text box for choosing the ship
-            if 
-                egui::TextEdit::singleline(input)
-                .hint_text("ship id")
-                .desired_width(50.0f32)
-                .ui(ui)
-                .lost_focus() 
-            {
-                if let Ok(new_id) = input.trim().parse() { *id = new_id; }
-                else { *input = id.to_string() }
-            }
+            input_box(ui, &mut self.input, &mut id, "ship_id");
 
             if egui::Button::new("Jump").ui(ui).clicked() {
-                if let Some(ship) = captured_state.storage.get(*id) {
+                if let Some(ship) = captured_state.storage.get(id) {
                     *look = get_component::<Transform, _>(ship).pos;
                 }
             }
         });
 
-        if old_id != self.id { 
-            if let Some(ship) = captured_state.storage.get(self.id) {
-                self.update_ship_strings(ship)
-            } else {
-                self.reset_ship_strings()
-            }
-        }
-        
+        self.pick_new_ship(&captured_state.storage, id);
+
         let id = &mut self.id;
 
         // Printing data about the ship

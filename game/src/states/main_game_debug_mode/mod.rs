@@ -14,7 +14,7 @@ use std::str::FromStr;
 // TODO create a prelude
 pub use egui::Ui;
 pub use super::main_game;
-pub use ship_parts::ship::Ship;
+pub use ship_parts::ship::{ Ship, ShipStorage };
 pub use sys_api::input_tracker::InputTracker;
 pub use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 pub use systems::systems_core::{ Storage, ComponentAccess, get_component, get_component_mut };

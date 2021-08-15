@@ -63,6 +63,12 @@ impl AxisAlignedBoundingBox {
 
     #[inline]
     pub fn collision_test(self, other : Self) -> bool { self.collision_area(other).is_some() }
+
+    #[inline]
+    pub fn point_inside(&self, point : Point2<f32>) -> bool {
+        (self.left <= point.x && point.x <= self.right) && 
+        (self.bottom <= point.y && point.y <= self.top)
+    }
 }
 
 #[inline]

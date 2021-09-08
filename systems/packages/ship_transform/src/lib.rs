@@ -1,66 +1,106 @@
-use cgmath::{ Matrix3, Matrix4, InnerSpace, EuclideanSpace, Point2, Vector2, assert_abs_diff_eq, vec2 };
-
-use cgmath_ext::matrix3_from_translation;
+use nalgebra::{ Translation, Isometry2, Matrix4, Point2, Point3, Vector2, Vector3, UnitComplex };
+use std::time::Duration;
 
 pub const VECTOR_NORMALIZATION_RANGE : f32 = 0.0001f32;
+// TODO store scale
 #[derive(Clone, Copy, Debug)]
 pub struct Transform {
-    pub pos : Point2<f32>,
-    direction : Vector2<f32>,
+    pub transform : Isometry2<f32>,
 }
 
 impl Transform {
-    pub const fn new(pos : Point2<f32>) -> Self {
+    pub const fn new(transform : Isometry2<f32>) -> Self {
         Transform {
-            pos,
-            direction : vec2(0.0f32, 1.0f32),
+            transform,
         }
     }
 
     #[inline]
-    pub fn model_mat(&self, size : (f32, f32)) -> Matrix4<f32> {
-        let direction = self.direction();
-
-        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * 
-        Matrix4::new(
-            direction.y, -direction.x, 0.0f32, 0.0f32,
-            direction.x, direction.y, 0.0f32, 0.0f32,
-            0.0f32, 0.0f32, 1.0f32, 0.0f32,
-            0.0f32, 0.0f32, 0.0f32, 1.0f32,
-        ) * 
-        Matrix4::from_nonuniform_scale(size.0, size.1, 1.0f32)
-    }
-
-    #[inline]
-    pub fn transform(&self) -> Matrix3<f32> {
-        matrix3_from_translation(self.pos.to_vec()) *
-        Matrix3::new(
-            self.direction.y, -self.direction.x, 0.0f32,
-            self.direction.x, self.direction.y, 0.0f32,
-            0.0f32, 0.0f32, 1.0f32,
+    pub fn model_mat(&self, (width, height) : (f32, f32)) -> Matrix4<f32> {
+        let mut mat =
+            self.transform.rotation
+            .to_rotation_matrix()
+            .matrix()
+            .fixed_resize(0.0f32)
+        ;
+        mat[(2, 2)] = 1.0f32;
+        mat[(3, 3)] = 1.0f32;
+        
+        Translation { vector : self.transform.translation.vector.push(0.0f32) }
+        .to_homogeneous() *
+        mat *
+        Matrix4::new_nonuniform_scaling_wrt_point(
+            &Vector3::new(width, height, 1.0f32),
+            &Point3::new(0.0f32, 0.0f32, 0.0f32)
         )
     }
-
-    #[inline]
-    pub fn direction(&self) -> Vector2<f32> {
-        self.direction
-    }
-
-    /// # Description
-    /// Changes the direction of the ship.
-    ///
-    /// # Panics
-    /// Panics when the direction argument is not a unit vector.
-    #[inline]
-    pub fn set_direction(&mut self, direction : Vector2<f32>) {
-        assert!(direction.x.is_finite()); assert!(direction.y.is_finite());
-        assert_abs_diff_eq!(direction.magnitude(), 1.0f32, epsilon = VECTOR_NORMALIZATION_RANGE);
-        self.direction = direction;
-    } 
-
+    
     #[inline]
     pub fn set_direction_angle(&mut self, ang : f32) {
-        let (s, c) = (std::f32::consts::FRAC_PI_2 - ang).sin_cos();
-        self.set_direction(vec2(c, s));
+        self.transform = 
+            Isometry2::new(
+                self.transform.translation.vector,
+                ang
+            )
+        ;
+    }
+
+    #[inline]
+    pub fn set_direction(
+        &mut self,
+        directing_vec : Vector2<f32>,
+    ) {
+        self.transform.rotation = UnitComplex::rotation_between(&Vector2::x(), &directing_vec) 
+    }
+
+    #[inline]
+    pub fn point_at(
+        &mut self,
+        target : Point2<f32>,
+    ) {
+        self.set_direction(target.coords - self.transform.translation.vector)
+    }
+
+    #[inline]
+    pub fn rotate_towards(
+        &mut self,
+        target : Point2<f32>,
+        angular_speed : f32,
+        dt : Duration,
+    ) {
+        let ang = self.angle_to(target);
+        let ang_val = ang.angle();
+
+        if ang_val.abs() > angular_speed * dt.as_secs_f32() {
+            self.transform.rotation *= UnitComplex::new(angular_speed * dt.as_secs_f32() * ang_val.signum())
+        } else { self.transform.rotation *= ang }
+    }
+
+    #[inline]
+    pub fn move_in_direction(
+        &mut self,
+        amount : f32,
+    ) {
+        self.transform.translation.vector += self.transform.rotation.transform_vector(&(amount * Vector2::x()));
+    }
+
+    #[inline]
+    pub fn rotation(&self) -> UnitComplex<f32> {
+        self.transform.rotation
+    }
+
+    #[inline]
+    pub fn position(&self) -> Point2<f32> {
+        self.transform.translation.vector.into()
+    }
+
+    #[inline]
+    pub fn angle_to(
+        &self,
+        target : Point2<f32>,
+    ) -> UnitComplex<f32> {
+        let target_vec = target.coords - self.transform.translation.vector;
+        let dir_vec = self.transform.rotation.transform_vector(&Vector2::x());
+        UnitComplex::rotation_between(&dir_vec, &target_vec)
     }
 }

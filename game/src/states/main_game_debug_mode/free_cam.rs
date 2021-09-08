@@ -21,7 +21,7 @@ impl DebugState for FreeCam {
         _ctx : &mut GraphicsContext, 
         _input_tracker : &InputTracker, 
         _pointer_in_ui : bool,
-        _look : &mut Point2<f32>,
+        _look : &mut Vector2<f32>,
     ) {
 
     }
@@ -34,7 +34,7 @@ impl DebugState for FreeCam {
         _dt : Duration,
         _ui : &mut Ui,
         _pointer_in_ui : bool,
-        _look : &mut Point2<f32>,
+        _look : &mut Vector2<f32>,
     ) {
 
     }

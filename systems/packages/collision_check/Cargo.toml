@@ -7,11 +7,10 @@ edition = "2018"
 
 [dependencies]
 # crates.io crates
-cgmath = { version = "0.18.0", features = ["serde"]}
+nalgebra = "0.29.0"
+parry2d = "0.7.0"
 # local crates
 systems_core = { path = "../systems_core" }
 ship_transform = { path = "../ship_transform" }
 # external crates
-cgmath_ext = { path = "../../../cgmath_ext" }
-collision = { path = "../../../collision" }
 sys_api = { path = "../../../sys_api" }

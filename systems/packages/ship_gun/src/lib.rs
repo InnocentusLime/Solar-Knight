@@ -3,6 +3,7 @@ use std::collections::{ HashMap, HashSet };
 
 use slab::Slab;
 use tinyvec::ArrayVec;
+use nalgebra::{ Isometry2, Vector2, UnitComplex, Matrix4 };
 
 use teams::Team;
 use hp_system::HpInfo;
@@ -11,11 +12,7 @@ use collision_check::{ CollisionSystem, CollisionInfo };
 use systems_core::{ ComponentAccess, get_component, get_component_mut, Observation, MutationObserver, DeletionObserver, Storage, SystemAccess, get_system };
 use ship_transform::Transform;
 use sys_api::graphics_init::PLAYER_BULLET_LIMIT;
-use cgmath_ext::{ rotate_vector_ox, rotate_vector_oy, rotate_vector_angle };
 use std_ext::duration_ext::*;
-use cgmath_ext::{ matrix3_from_translation };
-
-use cgmath::{ Point2, Vector2, Matrix3, Matrix4, EuclideanSpace, InnerSpace, vec2 };
 
 pub const VECTOR_NORMALIZATION_RANGE : f32 = 0.0001f32;
 pub const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
@@ -48,8 +45,7 @@ pub enum BulletData {
 // the bullet system
 #[derive(Clone, Copy, Debug)]
 pub struct Bullet {
-    pub pos : Point2<f32>,
-    pub direction : Vector2<f32>,
+    pub transform : Transform,
     pub kind : BulletData,
     pub lifetime : Duration,
     pub team : Team,
@@ -59,49 +55,20 @@ pub struct Bullet {
 impl Bullet {
     const HOMING_MISSLE_ALIGN_TIME : Duration = Duration::from_millis(500);
     
+    #[inline]
     pub fn size(&self) -> (f32, f32) {
         use sys_api::graphics_init::SCREEN_WIDTH;
         match self.kind {
-            BulletData::TestBullet => (0.06f32, 0.09f32),
+            BulletData::TestBullet => (0.09f32, 0.06f32),
             BulletData::LaserBall => (0.03f32, 0.03f32),
-            BulletData::SpinningLaser { .. } | BulletData::LaserBeam { .. } => (0.03f32, SCREEN_WIDTH / 1.5f32),
-            BulletData::HomingMissle { .. } => (0.06f32, 0.09f32),
+            BulletData::SpinningLaser { .. } | BulletData::LaserBeam { .. } => (SCREEN_WIDTH / 1.5f32, 0.03f32),
+            BulletData::HomingMissle { .. } => (0.09f32, 0.06f32),
         }
     }
 
     #[inline]
     pub fn model_mat(&self) -> Matrix4<f32> {
-        use cgmath::One;
-        use sys_api::graphics_init::SCREEN_WIDTH;
-        
-        let size = self.size();
-
-        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * 
-        Matrix4::new(
-            self.direction.y, -self.direction.x, 0.0f32, 0.0f32,
-            self.direction.x, self.direction.y, 0.0f32, 0.0f32,
-            0.0f32, 0.0f32, 1.0f32, 0.0f32,
-            0.0f32, 0.0f32, 0.0f32, 1.0f32,
-        ) *
-        (
-            match self.kind {
-                BulletData::SpinningLaser { .. } | BulletData::LaserBeam { .. } => {
-                    Matrix4::from_translation(vec2(0.0f32, SCREEN_WIDTH / 1.5f32).extend(0.0f32))
-                },
-                _ => Matrix4::one(),
-            }
-        ) *
-        Matrix4::from_nonuniform_scale(size.0, size.1, 1.0f32)
-    }
-
-    #[inline]
-    pub fn transform(&self) -> Matrix3<f32> {
-        matrix3_from_translation(self.pos.to_vec()) *
-        Matrix3::new(
-            self.direction.y, -self.direction.x, 0.0f32,
-            self.direction.x, self.direction.y, 0.0f32,
-            0.0f32, 0.0f32, 1.0f32,
-        )
+        self.transform.model_mat(self.size())
     }
 }
 
@@ -111,7 +78,7 @@ pub struct Gun {
     bullet_kind : BulletKind,
     recoil : Duration,
     timer : Duration,
-    direction : Vector2<f32>,
+    direction : UnitComplex<f32>,
 }
 
 impl Gun {
@@ -119,10 +86,8 @@ impl Gun {
         offset : Vector2<f32>,
         bullet_kind : BulletKind,
         recoil : Duration,
-        direction : Vector2<f32>,
+        direction : UnitComplex<f32>,
     ) -> Self {
-        // FIXME direction check
-
         Gun {
             offset,
             bullet_kind,
@@ -156,10 +121,10 @@ impl Gun {
 impl Default for Gun {
     fn default() -> Gun {
         Gun::new(
-            vec2(0.0f32, 0.0f32),
+            Vector2::new(0.0f32, 0.0f32),
             BulletKind::TestBullet,
             <Duration as DurationExt>::my_zero(),
-            vec2(0.0f32, 1.0f32)
+            UnitComplex::new(0.0f32)
         )
     }
 }
@@ -170,29 +135,6 @@ pub struct Guns {
     pub guns : ArrayVec<[Gun; ENGINE_LIMIT]>,
 }
     
-#[inline]
-fn rotate_towards(
-    pos : Point2<f32>,
-    direc : Vector2<f32>,
-    target : Point2<f32>,
-    angular_speed : f32,
-    dt : Duration,
-) -> Vector2<f32> {
-    let dir_vec = (target - pos).normalize();
-    let ang = direc.angle(dir_vec);
-
-    if ang.0.abs() > angular_speed * dt.as_secs_f32() {
-        let (c, s) =
-            if ang.0 > 0.0f32 {
-                ((angular_speed * dt.as_secs_f32()).cos(), (angular_speed * dt.as_secs_f32()).sin())
-            } else {
-                ((angular_speed * dt.as_secs_f32()).cos(), -(angular_speed * dt.as_secs_f32()).sin())
-            } 
-        ;
-        rotate_vector_ox(direc, vec2(c, s))
-    } else { dir_vec }
-}
-
 // TODO bench this versus the UID strategy
 pub struct BulletSystem {
     mem : Slab<Bullet>,
@@ -226,14 +168,14 @@ impl BulletSystem {
     {
         let (shooter_pos, shooter_dir) = {
             let transform = get_component::<Transform, _>(obj);
-            (transform.pos, transform.direction())
+            (transform.position(), transform.rotation())
         }; 
         let shooter_team = *get_component::<Team, _>(obj);
 
         let gun = get_component_mut::<Guns, _>(obj).guns.get_mut(gun).unwrap();
 
-        let off = rotate_vector_oy(shooter_dir, gun.offset);
-        let bullet_dir = rotate_vector_oy(shooter_dir, gun.direction);
+        let bullet_pos = shooter_pos + shooter_dir.transform_vector(&gun.offset);
+        let bullet_dir = shooter_dir * gun.direction;
 
         if !gun.can_shoot() { return; }; gun.shoot();
 
@@ -241,9 +183,11 @@ impl BulletSystem {
             BulletKind::TestBullet => {
                 self.spawn(        
                     Bullet {
-                        pos : shooter_pos + off,
+                        transform : Transform::new(Isometry2 {
+                            rotation : bullet_dir,
+                            translation : bullet_pos.into(),
+                        }),
                         team : shooter_team,
-                        direction : bullet_dir,
                         kind : BulletData::TestBullet,
                         lifetime : Duration::from_secs(3),
                         parent,
@@ -253,9 +197,11 @@ impl BulletSystem {
             BulletKind::LaserBall => {
                 self.spawn(        
                     Bullet {
-                        pos : shooter_pos + off,
+                        transform : Transform::new(Isometry2 {
+                            rotation : bullet_dir,
+                            translation : bullet_pos.into(),
+                        }),
                         team : shooter_team,
-                        direction : bullet_dir,
                         kind : BulletData::LaserBall,
                         lifetime : Duration::from_secs(3),
                         parent,
@@ -265,9 +211,11 @@ impl BulletSystem {
             BulletKind::SpinningLaser => {
                 self.spawn(        
                     Bullet {
-                        pos : shooter_pos + off,
+                        transform : Transform::new(Isometry2 {
+                            rotation : bullet_dir,
+                            translation : bullet_pos.into(),
+                        }),
                         team : shooter_team,
-                        direction : bullet_dir,
                         kind : BulletData::SpinningLaser,
                         lifetime : Duration::from_secs(1),
                         parent,
@@ -277,9 +225,11 @@ impl BulletSystem {
             BulletKind::LaserBeam => {
                 self.spawn(        
                     Bullet {
-                        pos : shooter_pos + off,
+                        transform : Transform::new(Isometry2 {
+                            rotation : bullet_dir,
+                            translation : bullet_pos.into(),
+                        }),
                         team : shooter_team,
-                        direction : bullet_dir,
                         kind : BulletData::LaserBeam,
                         lifetime : Duration::from_secs(3),
                         parent,
@@ -291,9 +241,11 @@ impl BulletSystem {
                 |direc|
                     self.spawn(        
                         Bullet {
-                            pos : shooter_pos + off,
+                            transform : Transform::new(Isometry2 {
+                                rotation : direc,
+                                translation : bullet_pos.into(),
+                            }),
                             team : shooter_team,
-                            direction : direc,
                             kind : BulletData::HomingMissle { 
                                 target : None,
                                 align_timer : Bullet::HOMING_MISSLE_ALIGN_TIME,
@@ -303,10 +255,10 @@ impl BulletSystem {
                         }
                     )
                 ;
-                spawn_bullet(rotate_vector_angle(shooter_dir, std::f32::consts::PI * 0.9f32));
-                spawn_bullet(rotate_vector_angle(shooter_dir, -std::f32::consts::PI * 0.9f32));
-                spawn_bullet(rotate_vector_angle(shooter_dir, std::f32::consts::PI * 0.7f32));
-                spawn_bullet(rotate_vector_angle(shooter_dir, -std::f32::consts::PI * 0.7f32));
+                spawn_bullet(shooter_dir * UnitComplex::new(std::f32::consts::PI * 0.9f32));
+                spawn_bullet(shooter_dir * UnitComplex::new(-std::f32::consts::PI * 0.9f32));
+                spawn_bullet(shooter_dir * UnitComplex::new(std::f32::consts::PI * 0.7f32));
+                spawn_bullet(shooter_dir * UnitComplex::new(-std::f32::consts::PI * 0.7f32));
             },
         }
     }
@@ -365,16 +317,13 @@ impl BulletSystem {
         ,
         Observer : MutationObserver<S> + SystemAccess<SquareMap>,
     {
-        use collision::*;
+        use collision_check::*;
         use std_ext::*;
-        use collision_check::consts::{ BulletTester, LaserBall, LaserBeam };
 
         let tracked_ships = &mut self.tracked_ships;
         self.mem.iter_mut()
         .for_each(
             |(bullet_id, bullet)| {
-                debug_assert!((bullet.direction.magnitude() - 1.0f32) < VECTOR_NORMALIZATION_RANGE);
-
                 bullet.lifetime = bullet.lifetime.my_saturating_sub(dt);
 
                 // Update bullet data and damage on collision
@@ -382,9 +331,8 @@ impl BulletSystem {
                     // TestBullet's move towards with speed 
                     // equal to 4.0.
                     BulletData::TestBullet => {
-                        bullet.pos += (4.0f32 * dt.as_secs_f32()) * bullet.direction;
+                        bullet.transform.move_in_direction(4.0f32 * dt.as_secs_f32());
         
-                        let my_body = BulletTester.apply_transform(&bullet.transform());
                         //let my_aabb = my_body.aabb();
 
                         c.mutate_each(
@@ -395,7 +343,7 @@ impl BulletSystem {
                                     *get_component::<Team, _>(obj) != bullet.team &&
                                     get_component::<HpInfo, _>(obj).is_alive() &&
                                     //target_aabb.collision_test(my_aabb) && 
-                                    collision.check(obj, &my_body)
+                                    collision.check(obj, CollisionModelIndex::BulletTester, &bullet.transform.transform)
                                 {
                                     get_component_mut::<HpInfo, _>(obj).damage(1);
                                     bullet.lifetime = <Duration as DurationExt>::my_zero();
@@ -404,9 +352,8 @@ impl BulletSystem {
                         )
                     },        
                     BulletData::LaserBall => {
-                        bullet.pos += (0.7f32 * dt.as_secs_f32()) * bullet.direction;
+                        bullet.transform.move_in_direction(0.7f32 * dt.as_secs_f32());
         
-                        let my_body = LaserBall.apply_transform(&bullet.transform());
                         //let my_aabb = my_body.aabb();
 
                         c.mutate_each(
@@ -417,7 +364,7 @@ impl BulletSystem {
                                     *get_component::<Team, _>(obj) != bullet.team &&
                                     get_component::<HpInfo, _>(obj).is_alive() &&
                                     //target_aabb.collision_test(my_aabb) && 
-                                    collision.check(obj, &my_body)
+                                    collision.check(obj, CollisionModelIndex::LaserBall, &bullet.transform.transform)
                                 {
                                     get_component_mut::<HpInfo, _>(obj).damage(1);
                                     bullet.lifetime = <Duration as DurationExt>::my_zero();
@@ -428,14 +375,12 @@ impl BulletSystem {
                     BulletData::SpinningLaser => {
                         let parent_pos = 
                             c.get(bullet.parent)
-                            .map(|obj| get_component::<Transform, _>(obj).pos)
+                            .map(|obj| get_component::<Transform, _>(obj).position())
                             .unwrap()
                         ;
-                        bullet.pos = parent_pos;
-                        let (sin, cos) = (std::f32::consts::TAU * dt.as_secs_f32()).sin_cos();
-                        bullet.direction = rotate_vector_ox(bullet.direction, vec2(cos, sin));
+                        bullet.transform.transform.translation = parent_pos.into();
+                        bullet.transform.transform.rotation = bullet.transform.rotation() * UnitComplex::new(std::f32::consts::TAU * dt.as_secs_f32());
                         
-                        let my_body = LaserBeam.apply_transform(&bullet.transform());
                         //let my_aabb = my_body.aabb();
 
                         c.mutate_each(
@@ -446,7 +391,7 @@ impl BulletSystem {
                                     *get_component::<Team, _>(obj) != bullet.team &&
                                     get_component::<HpInfo, _>(obj).is_alive() &&
                                     //target_aabb.collision_test(my_aabb) && 
-                                    collision.check(obj, &my_body)
+                                    collision.check(obj, CollisionModelIndex::LaserBeam, &bullet.transform.transform)
                                 {
                                     get_component_mut::<HpInfo, _>(obj).damage(1);
                                 } 
@@ -458,13 +403,12 @@ impl BulletSystem {
                             c.get(bullet.parent)
                             .map(|obj| {
                                 let transform = get_component::<Transform, _>(obj);
-                                (transform.pos, transform.direction()) 
+                                (transform.position(), transform.rotation()) 
                             }).unwrap()
                         ;
-                        bullet.pos = parent_pos;
-                        bullet.direction = parent_direction;
+                        bullet.transform.transform.translation = parent_pos.into();
+                        bullet.transform.transform.rotation = parent_direction;
                         
-                        let my_body = LaserBeam.apply_transform(&bullet.transform());
                         //let my_aabb = my_body.aabb();
 
                         c.mutate_each(
@@ -475,7 +419,7 @@ impl BulletSystem {
                                     *get_component::<Team, _>(obj) != bullet.team &&
                                     get_component::<HpInfo, _>(obj).is_alive() &&
                                     //target_aabb.collision_test(my_aabb) && 
-                                    collision.check(obj, &my_body)
+                                    collision.check(obj, CollisionModelIndex::LaserBeam, &bullet.transform.transform)
                                 {
                                     get_component_mut::<HpInfo, _>(obj).damage(1);
                                 } 
@@ -492,13 +436,13 @@ impl BulletSystem {
                                     get_component::<Transform, _>(
                                         c.get(*target)
                                         .unwrap()
-                                    ).pos
+                                    ).position()
                                 ;
                                 if align_timer.my_is_zero() {
-                                    bullet.direction = (target - bullet.pos).normalize();
+                                    bullet.transform.point_at(target);
                                 } else {
                                     *align_timer = align_timer.saturating_sub(dt);
-                                    bullet.direction = rotate_towards(bullet.pos, bullet.direction, target, std::f32::consts::TAU * 0.7f32, dt);
+                                    bullet.transform.rotate_towards(target, std::f32::consts::TAU * 0.7f32, dt);
                                 }
                             },
                             None => { 
@@ -507,7 +451,7 @@ impl BulletSystem {
                                     get_system::<SquareMap, _>(&c.observer)
                                     .find_closest(
                                         c.storage(), 
-                                        bullet.pos, 
+                                        bullet.transform.position(), 
                                         HOMING_MISSLE_SEE_RANGE, 
                                         |x| *get_component::<Team, _>(x) != bullet_team
                                     )
@@ -522,12 +466,11 @@ impl BulletSystem {
                         }
                                 
                         if align_timer.my_is_zero() {
-                            bullet.pos += (4.5f32 * dt.as_secs_f32()) * bullet.direction;
+                            bullet.transform.move_in_direction(4.5f32 * dt.as_secs_f32());
                         } else {
-                            bullet.pos += (1.8f32 * dt.as_secs_f32()) * bullet.direction;
+                            bullet.transform.move_in_direction(1.8f32 * dt.as_secs_f32());
                         }
         
-                        let my_body = BulletTester.apply_transform(&bullet.transform());
                         //let my_aabb = my_body.aabb();
 
                         c.mutate_each(
@@ -538,7 +481,7 @@ impl BulletSystem {
                                     *get_component::<Team, _>(obj) != bullet.team &&
                                     get_component::<HpInfo, _>(obj).is_alive() &&
                                     //target_aabb.collision_test(my_aabb) && 
-                                    collision.check(obj, &my_body)
+                                    collision.check(obj, CollisionModelIndex::BulletTester, &bullet.transform.transform)
                                 {
                                     get_component_mut::<HpInfo, _>(obj).damage(1);
                                     bullet.lifetime = <Duration as DurationExt>::my_zero();

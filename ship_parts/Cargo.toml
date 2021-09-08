@@ -11,16 +11,14 @@ lazy_static = "1.4.0"
 float-ord = "0.3.1"
 slab = { version = "0.4.3", features = ["serde"]}
 tinyvec = { version = "1.2.0", features = ["serde"]}
-cgmath = { version = "0.18.0", features = ["serde"]}
+nalgebra = "0.29.0"
 glium = "0.29.0"
 serde = { version = "1.0.123", features = ["derive"]}
 log = "*"
 image = "*"
 
 std_ext = { path = "../std_ext" }
-collision = { path = "../collision" }
 sys_api = { path = "../sys_api" }
-cgmath_ext = { path = "../cgmath_ext" }
 loaders = { path = "../loaders" }
 pack = { path = "../pack" }
 systems = { path = "../systems" }

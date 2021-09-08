@@ -1,5 +1,5 @@
 use float_ord::FloatOrd;
-use cgmath::{ MetricSpace, Point2 };
+use nalgebra::{ Point2, distance };
 
 use ship_transform::Transform;
 use systems_core::{ get_component, get_component_mut, ComponentAccess, Storage, StorageAccessError, DeletionObserver, SpawningObserver, MutationObserver };
@@ -211,8 +211,9 @@ impl SquareMap {
 
     #[inline]
     pub fn get_square(pos : Point2<f32>) -> Option<usize> {
-        let sq_x = (pos.x + (Self::SQUARE_MAP_SIDE_COUNT_HALF as f32) * Self::SQUARE_SIDE).div_euclid(Self::SQUARE_SIDE);
-        let sq_y = (pos.y + (Self::SQUARE_MAP_SIDE_COUNT_HALF as f32) * Self::SQUARE_SIDE).div_euclid(Self::SQUARE_SIDE);
+        let (x, y) = (pos.coords.x, pos.coords.y);
+        let sq_x = (x + (Self::SQUARE_MAP_SIDE_COUNT_HALF as f32) * Self::SQUARE_SIDE).div_euclid(Self::SQUARE_SIDE);
+        let sq_y = (y + (Self::SQUARE_MAP_SIDE_COUNT_HALF as f32) * Self::SQUARE_SIDE).div_euclid(Self::SQUARE_SIDE);
 
         if 
             sq_x < 0.0f32 || sq_x < 0.0f32 || 
@@ -255,7 +256,12 @@ impl SquareMap {
         Host : Storage,
         Host::Object : ComponentAccess<SquareMapNode> + ComponentAccess<Transform>,
     {
-        let pos = get_component::<Transform, _>(host.get(idx).ok_or(StorageAccessError)?).pos;
+        let pos = 
+            get_component::<Transform, _>(
+                host.get(idx)
+                .ok_or(StorageAccessError)?
+            ).position()
+        ;
 
         // TODO error code
         let square_id = Self::get_square(pos).unwrap();
@@ -307,7 +313,9 @@ impl SquareMap {
             let obj = host.get(idx).ok_or(StorageAccessError)?;
             // TODO error code
             (
-                Self::get_square(get_component::<Transform, _>(obj).pos).unwrap(), 
+                Self::get_square(
+                    get_component::<Transform, _>(obj).position()
+                ).unwrap(), 
                 get_component::<SquareMapNode, _>(obj).square_id
             )
         };
@@ -381,7 +389,7 @@ impl SquareMap {
             // my stuff otherwise
             RingIter::new(map, square, depth)
             .flat_map(move |square| Self::iter_square_ref(host, square))
-            .filter(move |(_, obj)| pos.distance(get_component::<Transform, _>(*obj).pos) <= range)
+            .filter(move |(_, obj)| distance(&pos, &get_component::<Transform, _>(*obj).position()) <= range)
         })
         .flatten()
     }
@@ -406,7 +414,14 @@ impl SquareMap {
         .filter_map(|depth| {
             RingIter::new(self, point_square, depth)
             .flat_map(|square| Self::iter_square_ref(host, square))
-            .map(|(id, obj)| (FloatOrd(pos.distance(get_component::<Transform, _>(obj).pos)), id, obj))
+            .map(
+                |(id, obj)| 
+                (
+                    FloatOrd(distance(&pos, &get_component::<Transform, _>(obj).position())), 
+                    id, 
+                    obj
+                )
+            )
             .filter(|x| x.0 <= range && filter(x.2))
             .min_by_key(|x| x.0)
             .map(|x| x.1)

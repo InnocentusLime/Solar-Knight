@@ -30,7 +30,7 @@ impl DebugState for ShipPlacement {
         _ctx : &mut GraphicsContext, 
         _input_tracker : &InputTracker, 
         pointer_in_ui : bool,
-        _look : &mut Point2<f32>,
+        _look : &mut Vector2<f32>,
     ) {
         match event {
             event::Event::WindowEvent { event, .. } => {
@@ -63,7 +63,7 @@ impl DebugState for ShipPlacement {
         _dt : Duration,
         ui : &mut Ui,
         _pointer_in_ui : bool,
-        look : &mut Point2<f32>,
+        look : &mut Vector2<f32>,
     ) {
         egui::ComboBox::from_label("Ship")
         .width(150.0)
@@ -82,7 +82,7 @@ impl DebugState for ShipPlacement {
 
         if self.placing {
             self.current_ship = *captured_state.templates.get_ship(self.placed_ship_info).unwrap();
-            get_component_mut::<Transform, _>(&mut self.current_ship).pos = *look + input_tracker.mouse_position();
+            get_component_mut::<Transform, _>(&mut self.current_ship).transform.translation.vector = *look + input_tracker.mouse_position();
         }
     }
 

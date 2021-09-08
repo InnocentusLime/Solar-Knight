@@ -4,10 +4,10 @@ use sys_api::graphics_init::SpriteDataWriter;
 use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 
 use glium::Frame;
-use cgmath::{ Point2, Matrix4, One, EuclideanSpace, InnerSpace, vec2 };
 use glium::texture::texture2d::Texture2d;
 use glium::uniforms::SamplerWrapFunction;
 use serde::{ Serialize, Deserialize };
+use nalgebra::{ Point2, Point3, Matrix4, Vector2, Vector3 };
 
 use systems::teams::Team;
 use systems::ship_transform::Transform;
@@ -21,10 +21,10 @@ fn point_at(from : Point2<f32>, at : Point2<f32>) -> Option<Point2<f32>> {
     let v = at - from;
     let x = (v.x / v.y.abs()).clamp(-SCREEN_WIDTH, SCREEN_WIDTH);
     let y = (SCREEN_WIDTH * v.y / v.x.abs()).clamp(-1.0f32, 1.0f32);
-    let pointer_v = vec2(x, y);
+    let pointer_v = Vector2::new(x, y);
 
-    if pointer_v.magnitude2() > v.magnitude2() { None }
-    else { Some(<Point2<f32> as EuclideanSpace>::from_vec(pointer_v)) }
+    if pointer_v.magnitude_squared() > v.magnitude_squared() { None }
+    else { Some(pointer_v.into()) }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -74,7 +74,7 @@ impl RenderSystem {
             player_ship_texture,
             ship_atlas_texture,
             ship_atlas_uv,
-            pointer_target : Point2 { x : 0.0f32, y : 0.0f32 },
+            pointer_target : Point2::new(0.0f32, 0.0f32),
         }
     }
 
@@ -106,10 +106,10 @@ impl RenderSystem {
 
         let dat =
             SpriteData {
-                mat_col1 : m.x.into(),
-                mat_col2 : m.y.into(),
-                mat_col3 : m.z.into(),
-                mat_col4 : m.w.into(),
+                mat_col1 : m.column(0).into_owned().into(),
+                mat_col2 : m.column(1).into_owned().into(),
+                mat_col3 : m.column(2).into_owned().into(),
+                mat_col4 : m.column(3).into_owned().into(),
                 texture_bottom_left : [cell.left, cell.bottom],
                 width_height : [(cell.right - cell.left), (cell.top - cell.bottom)],
                 color : color,
@@ -204,19 +204,19 @@ impl RenderSystem {
         use sys_api::graphics_utils::draw_sprite;
         use sys_api::graphics_init::SCREEN_WIDTH;
         
-        let cam = -ctx.camera.disp.truncate(); 
-        let picker = vec2((0.2f32 * cam.x / SCREEN_WIDTH) % 1.0f32, (0.2f32 * cam.y) % 1.0f32);
+        let cam = -ctx.camera.translation.vector.xy(); 
+        let picker = Vector2::new((0.2f32 * cam.x / SCREEN_WIDTH) % 1.0f32, (0.2f32 * cam.y) % 1.0f32);
         draw_sprite(
             ctx, frame, 
-            Matrix4::one(),
+            Matrix4::identity(),
             (picker.x, picker.y, 1.0f32, 1.0f32),
             self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
             Some(ctx.viewport())
         );
-        let picker = vec2((0.05f32 * cam.x / SCREEN_WIDTH - 0.5f32) % 1.0f32, (0.05f32 * cam.y + 0.03f32) % 1.0f32);
+        let picker = Vector2::new((0.05f32 * cam.x / SCREEN_WIDTH - 0.5f32) % 1.0f32, (0.05f32 * cam.y + 0.03f32) % 1.0f32);
         draw_sprite(
             ctx, frame, 
-            Matrix4::one(),
+            Matrix4::identity(),
             (picker.x, picker.y, 1.0f32, 1.0f32),
             self.background_texture.sampled().wrap_function(SamplerWrapFunction::Repeat), 
             Some(ctx.viewport())
@@ -242,7 +242,7 @@ impl RenderSystem {
         );
         draw_sprite(
             ctx, frame, 
-            vp * Matrix4::from_nonuniform_scale(0.6f32, 0.6f32, 1.0f32), 
+            vp * Matrix4::new_scaling(0.6f32), 
             (0.0f32, 0.0f32, 1.0f32, 1.0f32),
             self.sun_texture.sampled(), 
             Some(ctx.viewport())
@@ -257,16 +257,19 @@ impl RenderSystem {
     ) {
         use sys_api::graphics_utils::draw_sprite;
         
-        let looker = <Point2<f32> as EuclideanSpace>::from_vec(-ctx.camera.disp.truncate());
+        let looker = -ctx.camera.translation.vector.xy(); 
         let pointer_target = self.pointer_target;
 
-        let pointer = point_at(looker, pointer_target);
+        let pointer = point_at(looker.into(), pointer_target);
 
         if let Some(pointer) = pointer {
             let model_mat = 
                 ctx.proj_mat * 
-                Matrix4::from_translation(pointer.to_vec().extend(0.0f32)) * 
-                Matrix4::from_nonuniform_scale(0.1f32, 0.1f32, 1.0f32)
+                Matrix4::new_translation(&pointer.coords.push(0.0f32)) *
+                Matrix4::new_nonuniform_scaling_wrt_point(
+                    &Vector3::new(0.1f32, 0.1f32, 1.0f32),
+                    &Point3::new(0.0f32, 0.0f32, 0.0f32)
+                )
             ;
             draw_sprite(
                 ctx, frame, 
@@ -313,10 +316,10 @@ impl RenderSystem {
                 
                 let dat =
                     SpriteData {
-                        mat_col1 : m.x.into(),
-                        mat_col2 : m.y.into(),
-                        mat_col3 : m.z.into(),
-                        mat_col4 : m.w.into(),
+                        mat_col1 : m.column(0).into_owned().into(),
+                        mat_col2 : m.column(1).into_owned().into(),
+                        mat_col3 : m.column(2).into_owned().into(),
+                        mat_col4 : m.column(3).into_owned().into(),
                         texture_bottom_left : [0.0f32, 0.0f32],
                         width_height : [1.0f32, 1.0f32],
                         color : [1.0f32, 1.0f32, 1.0f32, 1.0f32],

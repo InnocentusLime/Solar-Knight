@@ -2,7 +2,7 @@ use glium::glutin;
 use glutin::window::{ WindowId, Window };
 use glutin::event::{ Event, WindowEvent, VirtualKeyCode, ElementState, MouseButton, KeyboardInput, DeviceEvent };
 use glutin::dpi::PhysicalSize;
-use cgmath::Vector2;
+use nalgebra::Vector2;
 
 use crate::graphics_init::SCREEN_WIDTH;
 
@@ -71,9 +71,7 @@ impl InputTracker {
 
     #[inline]
     pub fn mouse_position(&self) -> Vector2<f32> {
-        use cgmath::vec2;
-
-        vec2(self.mouse_pos_in_window.0, self.mouse_pos_in_window.1)
+        Vector2::new(self.mouse_pos_in_window.0, self.mouse_pos_in_window.1)
     }
 
     #[inline]

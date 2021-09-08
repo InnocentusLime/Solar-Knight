@@ -18,7 +18,7 @@ pub use ship_parts::ship::{ Ship, ShipStorage };
 pub use sys_api::input_tracker::InputTracker;
 pub use sys_api::graphics_init::{ RenderTargets, GraphicsContext };
 pub use systems::systems_core::{ Storage, ComponentAccess, get_component, get_component_mut };
-pub use cgmath::{ EuclideanSpace, InnerSpace, Point2, point2, vec2 };
+pub use nalgebra::{ Point2, Vector2 };
 pub use systems::{
     ship_transform::Transform,
     ship_gun::{ Gun, Guns, BulletKind },
@@ -57,7 +57,7 @@ pub trait DebugState {
         ctx : &mut GraphicsContext, 
         input_tracker : &InputTracker, 
         pointer_in_ui : bool,
-        look : &mut Point2<f32>,
+        look : &mut Vector2<f32>,
     );
     fn update(
         &mut self,
@@ -67,7 +67,7 @@ pub trait DebugState {
         dt : Duration,
         ui : &mut Ui,
         pointer_in_ui : bool,
-        look : &mut Point2<f32>,
+        look : &mut Vector2<f32>,
     );
     fn render(
         &self, 
@@ -81,7 +81,7 @@ pub trait DebugState {
 }
 
 pub struct StateData {
-    look : Point2<f32>,
+    look : Vector2<f32>,
     captured_state : main_game::StateData,
     // editor state
     state_id : usize,
@@ -97,7 +97,7 @@ impl StateData {
                 GameState::MainGameDebugMode(
                     StateData {
                         // Basic init
-                        look : <Point2<f32> as EuclideanSpace>::from_vec(-ctx.camera.disp.truncate()),
+                        look : -ctx.camera.translation.vector.xy(),
                         states : vec![
                             free_cam::FreeCam::new(&captured_state),
                             ship_placement::ShipPlacement::new(&captured_state),
@@ -211,12 +211,12 @@ impl StateData {
             .unwrap_or(false)
         };
 
-        if input_tracker.is_key_down(Key::W) { self.look += dt.as_secs_f32() * vec2(0.0f32, 1.0f32); }
-        if input_tracker.is_key_down(Key::A) { self.look += dt.as_secs_f32() * vec2(-1.0f32, 0.0f32); }
-        if input_tracker.is_key_down(Key::S) { self.look += dt.as_secs_f32() * vec2(0.0f32, -1.0f32); }
-        if input_tracker.is_key_down(Key::D) { self.look += dt.as_secs_f32() * vec2(1.0f32, 0.0f32); }
+        if input_tracker.is_key_down(Key::W) { self.look += dt.as_secs_f32() * Vector2::new(0.0f32, 1.0f32); }
+        if input_tracker.is_key_down(Key::A) { self.look += dt.as_secs_f32() * Vector2::new(-1.0f32, 0.0f32); }
+        if input_tracker.is_key_down(Key::S) { self.look += dt.as_secs_f32() * Vector2::new(0.0f32, -1.0f32); }
+        if input_tracker.is_key_down(Key::D) { self.look += dt.as_secs_f32() * Vector2::new(1.0f32, 0.0f32); }
 
-        ctx.camera.disp = (-self.look.to_vec()).extend(0.0f32);
+        ctx.camera.translation.vector = -self.look.push(0.0f32);
 
         if quit { Some(Box::new(Self::unwrap)) }
         else { None }

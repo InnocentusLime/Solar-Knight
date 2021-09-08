@@ -55,7 +55,7 @@ impl DebugState for AttachmentEdit {
         _ctx : &mut GraphicsContext, 
         _input_tracker : &InputTracker, 
         _pointer_in_ui : bool,
-        _look : &mut Point2<f32>,
+        _look : &mut Vector2<f32>,
     ) {
 
     }
@@ -68,7 +68,7 @@ impl DebugState for AttachmentEdit {
         _dt : Duration,
         ui : &mut Ui,
         _pointer_in_ui : bool,
-        _look : &mut Point2<f32>,
+        _look : &mut Vector2<f32>,
     ) {
         input_box(ui, &mut self.ship_id_buff, &mut self.ship_id, "ship id");
         input_box(ui, &mut self.parent_id_buff, &mut self.info.parent_id, "parent id");

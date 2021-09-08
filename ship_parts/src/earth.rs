@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use cgmath::{ Point2, EuclideanSpace, Matrix4, point2 };
+use nalgebra::{ Point2, Point3, Vector3, Matrix4 };
 
 use std_ext::*;
 
@@ -18,7 +18,7 @@ impl Earth {
 
     pub fn new() -> Earth {
         Earth {
-            pos : Point2 { x : Self::SUN_DISTANCE, y : 0.0f32 },
+            pos : Point2::new(Self::SUN_DISTANCE, 0.0f32),
             timing : <Duration as DurationExt>::my_zero(),
         }
     }
@@ -29,13 +29,17 @@ impl Earth {
         self.timing += dt;
 
         let phase = self.timing.as_secs_f32() * Self::ANGLE_SPEED;
-        self.pos = Self::SUN_DISTANCE * point2(phase.cos(), phase.sin());
+        self.pos = Self::SUN_DISTANCE * Point2::new(phase.cos(), phase.sin());
 
         self.timing = self.timing.my_rem(Self::LOOP_TIME)
     }
 
     #[inline]
     pub fn model_mat(&self) -> Matrix4<f32> {
-        Matrix4::from_translation(self.pos.to_vec().extend(0.0f32)) * Matrix4::from_nonuniform_scale(0.3f32, 0.3f32, 1.0f32)
+        Matrix4::new_translation(&self.pos.coords.push(0.0f32)) *
+        Matrix4::new_nonuniform_scaling_wrt_point(
+            &Vector3::new(0.3f32, 0.3f32, 1.0f32),
+            &Point3::new(0.0f32, 0.0f32, 0.0f32)
+        )
     }
 }

@@ -1,23 +1,51 @@
-use cgmath::{ Matrix3, EuclideanSpace };
-
-use collision::{ ComputeAxisAlignedBoundingBox, AxisAlignedBoundingBox, Collision, declare_bodies };
-use cgmath_ext::matrix3_from_translation;
+use nalgebra::{ Vector2, Isometry2 };
+use parry2d::shape::{ Cuboid, Shape };
+use parry2d::query::intersection_test;
+use parry2d::bounding_volume::AABB;
 
 use ship_transform::Transform;
 use systems_core::{ ComponentAccess, get_component };
 
-// TODO laser ball is a circle!!!
-// TODO `declare_bodies` could use a `box` variant
-declare_bodies!(
-    Player = (Mesh : (-0.1f32, 0.1f32), (0.1f32, 0.1f32), (0.1f32, -0.1f32), (-0.1f32, -0.1f32));
-    EnemyTester = (Mesh : (-0.1f32, 0.1f32), (0.1f32, 0.1f32), (0.1f32, -0.1f32), (-0.1f32, -0.1f32));
-    BulletTester = (Mesh : (-0.06f32, 0.09f32), (0.06f32, 0.09f32), (0.06f32, -0.09f32), (-0.06f32, -0.09f32));
-    LaserBall = (Mesh : (-0.03f32, 0.03f32), (0.03f32, 0.03f32), (0.03f32, -0.03f32), (-0.03f32, -0.03f32));
-    LaserBeam = (Mesh : (-0.03f32, sys_api::graphics_init::SCREEN_WIDTH / 1.5f32), (0.03f32, sys_api::graphics_init::SCREEN_WIDTH / 1.5f32), (0.03f32, 0.0f32), (-0.03f32, 0.0f32));
-);
+#[derive(Clone, Copy, Debug)]
+pub enum CollisionModelIndex {
+    Player,
+    EnemyTester,
+    BulletTester,
+    LaserBall,
+    LaserBeam,
+}
 
-pub use bodies::*;
-pub use model_indices::*;
+// TODO macro
+struct ColliderTable {
+    player : Cuboid,
+    enemy_tester : Cuboid,
+    bullet_tester : Cuboid,
+    laser_ball : Cuboid,
+    laser_beam : Cuboid,
+}
+
+impl ColliderTable {
+    fn new() -> Self {
+        ColliderTable {
+            player : Cuboid::new(Vector2::new(0.1f32, 0.1f32)),
+            enemy_tester : Cuboid::new(Vector2::new(0.1f32, 0.1f32)),
+            bullet_tester : Cuboid::new(Vector2::new(0.09f32, 0.06f32)),
+            laser_ball : Cuboid::new(Vector2::new(0.03f32, 0.03f32)),
+            laser_beam : Cuboid::new(Vector2::new(sys_api::graphics_init::SCREEN_WIDTH / 1.5f32, 0.03f32)),
+        }
+    }
+
+    fn decypher(&self, idx : CollisionModelIndex) -> &dyn Shape {
+        use CollisionModelIndex::*;
+        match idx {
+            Player => &self.player,
+            EnemyTester => &self.enemy_tester,
+            BulletTester => &self.bullet_tester,
+            LaserBall => &self.laser_ball,
+            LaserBeam => &self.laser_beam,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct CollisionInfo {
@@ -35,52 +63,41 @@ impl CollisionInfo {
     
     #[inline]
     pub fn model(&self) -> CollisionModelIndex { self.model }
-    
-    #[inline]
-    fn transform(&self, transform : &Transform) -> Matrix3<f32> {
-        matrix3_from_translation(transform.pos.to_vec()) *
-        Matrix3::new(
-            transform.direction().y, -transform.direction().x, 0.0f32,
-            transform.direction().x, transform.direction().y, 0.0f32,
-            0.0f32, 0.0f32, 1.0f32,
-        )
-    }
-
-    fn phys_body(&self, transform : &Transform) -> CollisionModel {
-        use collision::*;
-
-        self.model.decypher()
-        .apply_transform(&self.transform(transform))
-    }
 }
 
 pub struct CollisionSystem {
-
+    colliders : ColliderTable,
 }
 
 impl CollisionSystem {
     pub fn new() -> Self {
-        CollisionSystem {}
+        CollisionSystem {
+            colliders : ColliderTable::new(),
+        }
     }
 
     // TODO the `other` argument should be a another type (`Obj2`)
     // this is currently blocked purely because of the way `Bullets` are
     // implemented
-    pub fn check<Obj>(&self, obj : &Obj, other : &CollisionModel) -> bool
+    pub fn check<Obj>(&self, obj : &Obj, other_model : CollisionModelIndex, other_transform : &Isometry2<f32>) -> bool
     where
         Obj : ComponentAccess<Transform> + ComponentAccess<CollisionInfo>,
     {
-        let collision_info = get_component::<CollisionInfo, _>(obj);
-        let transform = get_component::<Transform, _>(obj);
-        collision_info.phys_body(transform).check_collision(other)
+        let model = get_component::<CollisionInfo, _>(obj).model;
+        let transform = &get_component::<Transform, _>(obj).transform;
+
+        let shape = self.colliders.decypher(model);
+        let other_shape = self.colliders.decypher(other_model);
+
+        intersection_test(transform, shape, other_transform, other_shape).unwrap()
     }
 
-    pub fn get_aabb<Obj>(&self, obj : &Obj) -> AxisAlignedBoundingBox 
+    pub fn get_aabb<Obj>(&self, obj : &Obj) -> AABB
     where
         Obj : ComponentAccess<Transform> + ComponentAccess<CollisionInfo>,
     {
-        let collision_info = get_component::<CollisionInfo, _>(obj);
-        let transform = get_component::<Transform, _>(obj);
-        collision_info.phys_body(transform).aabb()
+        let collision_info = get_component::<CollisionInfo, _>(obj).model;
+        let transform = &get_component::<Transform, _>(obj).transform;
+        self.colliders.decypher(collision_info).compute_aabb(transform)
     }
 }

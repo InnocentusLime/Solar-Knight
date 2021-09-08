@@ -55,7 +55,7 @@ impl StateData {
     }
 
     pub fn render(&self, frame : &mut Frame, ctx : &mut GraphicsContext, _ : &mut RenderTargets, _input_tracker : &InputTracker) {
-        use cgmath::{ One, Matrix4 };
+        use nalgebra::{ Matrix4, Vector3, Point3 };
 
         use sys_api::graphics_utils::draw_sprite;
         /* render code */
@@ -63,14 +63,18 @@ impl StateData {
 
         draw_sprite(
             ctx, frame, 
-            Matrix4::one(), 
+            Matrix4::identity(), 
             (0.0f32, 0.0f32, 1.0f32, 1.0f32),
             self.background_texture.sampled(), 
             Some(ctx.viewport())
         );
         draw_sprite(
             ctx, frame, 
-            vp * Matrix4::from_nonuniform_scale(0.5f32, 0.5f32, 1.0f32), 
+            vp * 
+            Matrix4::new_nonuniform_scaling_wrt_point(
+                &Vector3::new(0.5f32, 0.5f32, 1.0f32),
+                &Point3::new(0.0f32, 0.0f32, 0.0f32)
+            ), 
             (0.0f32, 0.0f32, 1.0f32, 1.0f32),
             self.play_button_texture.sampled(), 
             Some(ctx.viewport())

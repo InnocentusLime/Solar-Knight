@@ -10,7 +10,6 @@ use sys_api::input_tracker::InputTracker;
 
 use glium::glutin;
 use glutin::event;
-use cgmath::{ InnerSpace, abs_diff_ne };
 
 pub struct PlayerManager {
     // Quick bodge for the dash
@@ -85,15 +84,12 @@ impl PlayerManager {
         Observer : MutationObserver<Host>,
     {
         use glutin::event::{ VirtualKeyCode as Key, MouseButton };
-        pub const VECTOR_NORMALIZATION_RANGE : f32 = 0.0001f32;
 
         storage
         .mutate(0, |player, _| {
             if get_component::<HpInfo, _>(player).is_alive() {
                 let mouse_pos = input_tracker.mouse_position();
-                if abs_diff_ne!(mouse_pos.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) {
-                    get_component_mut::<Transform, _>(player).set_direction(mouse_pos.normalize());
-                }
+                get_component_mut::<Transform, _>(player).set_direction(mouse_pos.normalize());
        
                 let main_engine = get_component_mut::<Engines, _>(player).engines.get_mut(0).unwrap();
                 if input_tracker.is_mouse_button_down(MouseButton::Right) {

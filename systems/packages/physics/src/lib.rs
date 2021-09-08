@@ -1,4 +1,4 @@
-use cgmath::{ Vector2, abs_diff_ne, InnerSpace, vec2 };
+use nalgebra::Vector2;
 
 use std::time::Duration;
 
@@ -18,21 +18,64 @@ impl PhysicsData {
     pub fn new(mass : f32) -> Self {
         PhysicsData {
             mass,
-            force : vec2(0.0f32, 0.0f32),
-            velocity : vec2(0.0f32, 0.0f32),
+            force : Vector2::new(0.0f32, 0.0f32),
+            velocity : Vector2::new(0.0f32, 0.0f32),
         }
     }
 }
 
 pub struct PhysicsSystem {
     env_friction : f32,
+    resitution : f32,
 }
 
 impl PhysicsSystem {
     pub fn new() -> Self {
         PhysicsSystem {
             env_friction : 0.24f32,
+            resitution : 1.0f32,
         }
+    }
+
+    fn solve_collisions<Host, Observer>(
+        &mut self, 
+        _observation : &mut Observation<Observer, Host>, 
+    )
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<PhysicsData> + ComponentAccess<Transform>,
+        Observer : MutationObserver<Host>,
+    {
+        /* TODO */
+    }
+
+
+    fn tick<Host, Observer>(
+        &mut self, 
+        observation : &mut Observation<Observer, Host>, 
+        dt : Duration
+    )
+    where
+        Host : Storage,
+        Host::Object : ComponentAccess<PhysicsData> + ComponentAccess<Transform>,
+        Observer : MutationObserver<Host>,
+    {
+        observation.mutate_each(
+            |obj, _| {
+                let phys = get_component_mut::<PhysicsData, _>(obj);
+                if 
+                    phys.velocity.magnitude() >= VECTOR_NORMALIZATION_RANGE
+                {
+                    phys.force -= self.env_friction * phys.velocity.magnitude() * phys.velocity;
+                }
+                let acceleration = phys.force / phys.mass;
+                phys.velocity += dt.as_secs_f32() * acceleration; 
+                phys.force = Vector2::new(0.0f32, 0.0f32);
+
+                let dr = phys.velocity * dt.as_secs_f32() + acceleration / 2.0f32 * dt.as_secs_f32().powi(2);
+                get_component_mut::<Transform, _>(obj).transform.translation.vector += dr;
+            }
+        )
     }
 
     pub fn update<Host, Observer>(
@@ -45,25 +88,7 @@ impl PhysicsSystem {
         Host::Object : ComponentAccess<PhysicsData> + ComponentAccess<Transform>,
         Observer : MutationObserver<Host>,
     {
-        observation.mutate_each(
-            |obj, _| {
-                // TODO not part of the phys sys
-                //engines.iter_mut().for_each(|x| x.update(core, dt));
-                //guns.iter_mut().for_each(|x| x.update(core, dt));
-
-                let phys = get_component_mut::<PhysicsData, _>(obj);
-                if 
-                    abs_diff_ne!(phys.velocity.magnitude(), 0.0f32, epsilon = VECTOR_NORMALIZATION_RANGE) 
-                {
-                    phys.force -= self.env_friction * phys.velocity.magnitude() * phys.velocity;
-                }
-                let acceleration = phys.force / phys.mass;
-                phys.velocity += dt.as_secs_f32() * acceleration; 
-                phys.force = vec2(0.0f32, 0.0f32);
-
-                let dr = phys.velocity * dt.as_secs_f32() + acceleration / 2.0f32 * dt.as_secs_f32().powi(2);
-                get_component_mut::<Transform, _>(obj).pos += dr;
-            }
-        )
+        self.solve_collisions(observation);
+        self.tick(observation, dt);
     }
 }

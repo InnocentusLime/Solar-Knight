@@ -7,8 +7,9 @@ edition = "2018"
 
 [dependencies]
 # crates.io crates
+nalgebra = "0.29.0"
+parry2d = "0.7.0"
 slab = { version = "0.4.3", features = ["serde"]}
-cgmath = { version = "0.18.0", features = ["serde"]}
 tinyvec = { version = "1.2.0", features = ["serde"]}
 # local crates
 systems_core = { path = "../systems_core" }
@@ -19,7 +20,5 @@ teams = { path = "../teams" }
 hp_system = { path = "../hp_system" }
 # external crates
 # TODO collision should be part of this system
-collision = { path = "../../../collision" }
 std_ext = { path = "../../../std_ext" }
-cgmath_ext = { path = "../../../cgmath_ext" }
 sys_api = { path = "../../../sys_api" }

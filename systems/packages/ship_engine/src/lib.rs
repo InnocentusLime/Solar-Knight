@@ -1,16 +1,14 @@
-use cgmath::{ Vector2, InnerSpace, assert_abs_diff_eq, vec2 };
-use serde::{ Serialize, Deserialize };
+use nalgebra::{ Unit, Complex, UnitComplex, Vector2 };
+//use serde::{ Serialize, Deserialize };
 use tinyvec::ArrayVec;
-
-use cgmath_ext::rotate_vector_oy;
 
 use ship_transform::Transform;
 use physics::PhysicsData;
 use systems_core::{ get_component, get_component_mut, ComponentAccess, Storage, MutationObserver, Observation };
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug)]
 pub struct Engine {
-    direction : Vector2<f32>,
+    pub direction : UnitComplex<f32>,
     max_lvl : u16,
     force_mul : f32,
     current_lvl : u16
@@ -19,13 +17,12 @@ pub struct Engine {
 pub const VECTOR_NORMALIZATION_RANGE : f32 = 0.0001f32;
 impl Engine {
     pub fn new(
-        direction : Vector2<f32>,
+        direction : UnitComplex<f32>,
         max_lvl : u16,
         force_mul : f32,
         start_lvl : u16,
     ) -> Self {
         assert!(start_lvl <= max_lvl);
-        assert_abs_diff_eq!(direction.magnitude(), 1.0f32, epsilon=VECTOR_NORMALIZATION_RANGE);
 
         Engine {
             direction,
@@ -52,17 +49,11 @@ impl Engine {
     pub fn set_level(&mut self, level : u16) {
         self.current_lvl = level.min(self.max_lvl);
     }
-
-    /*
-    #[inline]
-    pub fn update(&mut self, core : &mut crate::core::Core, _dt : std::time::Duration) {
-    }
-    */
 }
 
 impl Default for Engine {
     fn default() -> Engine {
-        Engine::new(vec2(0.0f32, 1.0f32), 0, 0.0f32, 0)
+        Engine::new(Unit::new_normalize(Complex::new(0.0f32, 1.0f32)), 0, 0.0f32, 0)
     }
 }
 
@@ -93,9 +84,9 @@ impl EngineSystem {
         EngineSystem
     }
 
-    fn engine_force(engine : &Engine, dir : Vector2<f32>) -> Vector2<f32> {
-        let direction = rotate_vector_oy(dir, engine.direction);
-        (engine.force_mul * engine.current_lvl as f32) * direction
+    fn engine_force(engine : &Engine, dir : UnitComplex<f32>) -> Vector2<f32> {
+        let direction = dir * engine.direction;
+        (engine.force_mul * engine.current_lvl as f32) * (direction * Vector2::new(1.0f32, 0.0f32))
     }
 
     pub fn update<Host, Observer>(
@@ -109,8 +100,8 @@ impl EngineSystem {
     {
         observation.mutate_each(
             |obj, _| {
-                let dir = get_component::<Transform, _>(obj).direction();
-                let force = 
+                let dir = get_component::<Transform, _>(obj).transform.rotation;
+                let force : Vector2<f32> = 
                     get_component::<Engines, _>(obj).engines.iter()
                     .map(|e| Self::engine_force(e, dir))
                     .sum()

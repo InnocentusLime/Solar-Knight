@@ -8,7 +8,7 @@ use glutin::{ ContextBuilder, event_loop::EventLoop };
 use glium::glutin::window::WindowBuilder;
 use glium::debug::DebugCallbackBehavior;
 use glium::buffer::WriteMapping;
-use cgmath::{ Decomposed, Matrix4, Vector3, Quaternion, One, ortho };
+use nalgebra::{ Matrix4, Isometry3 };
 
 use crate::verbose_try;
 use crate::basic_graphics_data::*;
@@ -62,7 +62,7 @@ pub struct RenderTargets {
 /// the startup.
 pub struct GraphicsContext {
     pub display : Display,
-    pub camera : Decomposed<Vector3<f32>, Quaternion<f32>>, 
+    pub camera : Isometry3<f32>,
     pub proj_mat : Matrix4<f32>,
     pub quad_vertex_buffer : VertexBuffer<GlVertex>,
     pub sprite_shader : Program,
@@ -105,7 +105,7 @@ impl GraphicsContext {
 
     #[inline]
     pub fn build_projection_view_matrix(&self) -> Matrix4<f32> {
-        self.proj_mat * Matrix4::from(self.camera)
+        self.proj_mat * self.camera.to_homogeneous()
     }
 
     pub fn new() -> Result<(GraphicsContext, EventLoop<()>, RenderTargets), Box<dyn StdError>> {
@@ -149,7 +149,7 @@ impl GraphicsContext {
         // stuff. 
         // IMHO, an orign which is in top left corner is more sensible for an UI rather than for
         // level geometry
-        let proj_mat = ortho(SCREEN_LEFT, SCREEN_RIGHT, -1.0f32, 1.0f32, -1.0f32, 1.0f32);
+        let proj_mat = Matrix4::new_orthographic(SCREEN_LEFT, SCREEN_RIGHT, -1.0f32, 1.0f32, -1.0f32, 1.0f32);
         //let proj_mat = ortho(2.0f32*SCREEN_LEFT, 2.0f32*SCREEN_RIGHT, -2.0f32, 2.0f32, -1.0f32, 1.0f32);
 
         let framebuffer1 = verbose_try!(Texture2d::empty(&display, phys_size.width, phys_size.height), framebuffer1_creation);
@@ -225,7 +225,7 @@ impl GraphicsContext {
             (
                 GraphicsContext {
                     display,
-                    camera : <Decomposed<_, _> as One>::one(),
+                    camera : Isometry3::identity(),
                     proj_mat,
                     quad_vertex_buffer,
                     sprite_shader,

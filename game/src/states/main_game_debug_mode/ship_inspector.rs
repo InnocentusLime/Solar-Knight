@@ -1,5 +1,7 @@
 use super::*;
 
+use std::ops::DerefMut;
+
 pub struct ShipInspector {
     // Selection of ship
     id : usize,
@@ -62,8 +64,8 @@ impl ShipInspector {
     fn update_ship_strings(&mut self, ship : &Ship) {
         self.hp = get_component::<HpInfo, _>(ship).hp().to_string();
         self.mass = get_component::<PhysicsData, _>(ship).mass.to_string();
-        self.pos_x = get_component::<Transform, _>(ship).pos.x.to_string();
-        self.pos_y = get_component::<Transform, _>(ship).pos.y.to_string();
+        self.pos_x = get_component::<Transform, _>(ship).transform.translation.vector.x.to_string();
+        self.pos_y = get_component::<Transform, _>(ship).transform.translation.vector.y.to_string();
     }
 
     fn reset_ship_strings(&mut self) {
@@ -118,7 +120,7 @@ impl DebugState for ShipInspector {
         _ctx : &mut GraphicsContext, 
         input_tracker : &InputTracker, 
         pointer_in_ui : bool,
-        look : &mut Point2<f32>,
+        look : &mut Vector2<f32>,
     ) {
         match event {
             event::Event::WindowEvent { event, .. } => {
@@ -142,13 +144,13 @@ impl DebugState for ShipInspector {
                                 captured_state.square_map
                                 .iter_zone(
                                     &captured_state.storage,
-                                    click_pos,
+                                    click_pos.into(),
                                     1.0f32,
                                 )
                                 .filter(|(_, obj)|
                                     captured_state.collision_sys
                                     .get_aabb(*obj)
-                                    .point_inside(click_pos)
+                                    .contains_local_point(&click_pos.into())
                                 )
                                 .map(|(idx, _)| idx)
                                 .peekable()
@@ -181,7 +183,7 @@ impl DebugState for ShipInspector {
         _dt : Duration,
         ui : &mut Ui,
         _pointer_in_ui : bool,
-        look : &mut Point2<f32>,
+        look : &mut Vector2<f32>,
     ) {
         let mut id = self.input.trim().parse().unwrap_or(0);
 
@@ -191,7 +193,7 @@ impl DebugState for ShipInspector {
 
             if egui::Button::new("Jump").ui(ui).clicked() {
                 if let Some(ship) = captured_state.storage.get(id) {
-                    *look = get_component::<Transform, _>(ship).pos;
+                    *look = get_component::<Transform, _>(ship).transform.translation.vector;
                 }
             }
         });
@@ -215,9 +217,15 @@ impl DebugState for ShipInspector {
             egui::Separator::default().horizontal().ui(ui);
                
             let transform = get_component_mut::<Transform, _>(ship);
-            input_box_2(ui, &mut self.pos_x, &mut self.pos_y, &mut transform.pos.x, &mut transform.pos.y, "pos");
-            let dir = transform.direction();
-            let mut ang = dir.angle(vec2(0.0f32, 1.0f32)).0;
+            let pos = &mut transform.transform.translation.vector.deref_mut();
+            input_box_2(
+                ui, 
+                &mut self.pos_x, &mut self.pos_y, 
+                &mut pos.x, 
+                &mut pos.y, 
+                "pos"
+            );
+            let mut ang = transform.rotation().angle();
             ui.horizontal(|ui| {
                 ui.drag_angle(&mut ang);
                 ui.heading("direction");

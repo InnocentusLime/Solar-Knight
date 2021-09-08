@@ -1,5 +1,5 @@
-use cgmath::{ vec2, point2 };
 use tinyvec::array_vec;
+use nalgebra::{ Isometry2, Vector2, UnitComplex };
 
 pub use systems::{
     ship_transform::Transform,
@@ -68,16 +68,16 @@ impl TemplateTableEntry {
             name : "Player ship".to_owned(),
             prefab : Ship {
                 team : Team::Earth,
-                transform : Transform::new(point2(0.0f32, 0.0f32)),
+                transform : Transform::new(Isometry2::identity()),
                 guns : Guns { guns : array_vec![_ => 
-                    Gun::new(vec2(0.0f32, 0.0f32), BulletKind::TestBullet, Duration::from_millis(300), vec2(0.0f32, 1.0f32)),
-                    Gun::new(vec2(0.0f32, 0.0f32), BulletKind::LaserBeam, Duration::from_secs(4), vec2(0.0f32, 1.0f32)),
-                    Gun::new(vec2(0.0f32, 0.0f32), BulletKind::SpinningLaser, Duration::from_secs(2), vec2(0.0f32, 1.0f32)),
-                    Gun::new(vec2(0.0f32, 0.0f32), BulletKind::HomingMissle, Duration::from_millis(600), vec2(0.0f32, 1.0f32)),
+                    Gun::new(Vector2::new(0.0f32, 0.0f32), BulletKind::TestBullet, Duration::from_millis(300), UnitComplex::new(0.0f32)),
+                    Gun::new(Vector2::new(0.0f32, 0.0f32), BulletKind::LaserBeam, Duration::from_secs(4), UnitComplex::new(0.0f32)),
+                    Gun::new(Vector2::new(0.0f32, 0.0f32), BulletKind::SpinningLaser, Duration::from_secs(2), UnitComplex::new(0.0f32)),
+                    Gun::new(Vector2::new(0.0f32, 0.0f32), BulletKind::HomingMissle, Duration::from_millis(600), UnitComplex::new(0.0f32)),
                 ]},
                 engines : Engines { engines : array_vec![_ => 
-                    Engine::new(vec2(0.0f32, 1.0f32), 1, 5.0f32, 0),
-                    Engine::new(vec2(0.0f32, 1.0f32), 1, 1200.0f32, 0),
+                    Engine::new(UnitComplex::new(0.0f32), 1, 5.0f32, 0),
+                    Engine::new(UnitComplex::new(0.0f32), 1, 1200.0f32, 0),
                 ]},
                 physics : PhysicsData::new(5.0f32),
                 hp_info : HpInfo::new(3),
@@ -96,9 +96,9 @@ impl TemplateTableEntry {
             name : "Turret enemy".to_owned(),
             prefab : Ship {
                 team : Team::Hive,
-                transform : Transform::new(point2(0.0f32, 0.0f32)),
+                transform : Transform::new(Isometry2::identity()),
                 guns : Guns { guns : array_vec![_ => 
-                    Gun::new(vec2(0.0f32, 0.0f32), BulletKind::LaserBall, Duration::from_millis(400), vec2(0.0f32, 1.0f32))
+                    Gun::new(Vector2::new(0.0f32, 0.0f32), BulletKind::LaserBall, Duration::from_millis(400), UnitComplex::new(0.0f32))
                 ]},
                 engines : Engines { engines : array_vec![] },
                 physics : PhysicsData::new(100.0f32),
@@ -121,10 +121,10 @@ impl TemplateTableEntry {
             name : "Heavy's body".to_owned(),
             prefab : Ship {
                 team : Team::Hive,
-                transform : Transform::new(point2(0.0f32, 0.0f32)),
+                transform : Transform::new(Isometry2::identity()),
                 guns : Guns { guns : array_vec![] },
                 engines : Engines { engines : array_vec![_ => 
-                    Engine::new(vec2(0.0f32, 1.0f32), 1, 1.0f32, 1),
+                    Engine::new(UnitComplex::new(0.0f32), 1, 1.0f32, 1),
                 ]},
                 physics : PhysicsData::new(100.0f32),
                 hp_info : HpInfo::new(10),
@@ -143,10 +143,10 @@ impl TemplateTableEntry {
             name : "Fly".to_owned(),
             prefab : Ship {
                 team : Team::Hive,
-                transform : Transform::new(point2(0.0f32, 0.0f32)),
+                transform : Transform::new(Isometry2::identity()),
                 guns : Guns { guns : array_vec![] },
                 engines : Engines { engines : array_vec![_ => 
-                    Engine::new(vec2(0.0f32, 1.0f32), 2, 1.2f32, 1),
+                    Engine::new(UnitComplex::new(0.0f32), 2, 1.2f32, 1),
                 ]},
                 physics : PhysicsData::new(1.5f32),
                 hp_info : HpInfo::new(1),

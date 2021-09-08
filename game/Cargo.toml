@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 downcast-rs = "1.2.0"
-cgmath = "0.18.0"
+nalgebra = "0.29.0"
 glium = "0.29.0"
 log = "*"
 image = "*"
@@ -18,8 +18,6 @@ egui_glium = "0.12.0"
 
 sys_api = { path = "../sys_api" }
 loaders = { path = "../loaders" }
-collision = { path = "../collision" }
 ship_parts = { path = "../ship_parts" }
 std_ext = { path = "../std_ext" }
-cgmath_ext = { path = "../cgmath_ext" }
 systems = { path = "../systems" }

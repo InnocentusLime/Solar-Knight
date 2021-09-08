@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use egui_glium::EguiGlium;
-use cgmath::{ EuclideanSpace, Point2 };
+use nalgebra::Point2;
 use glium::{ glutin, Frame };
 
 use systems::systems_core::{ Storage, get_component };
@@ -172,12 +172,12 @@ impl StateData {
         self.player.update(&mut mutation_lock, input_tracker, &mut self.bullet_sys, dt);
         
         if let Some(player) = self.storage.get(0) {
-            ctx.camera.disp = (-get_component::<Transform, _>(player).pos.to_vec()).extend(0.0f32);
+            ctx.camera.translation = (-get_component::<Transform, _>(player).position().coords).push(0.0f32).into();
         } else { panic!("No player!!"); }
             
         match self.pointer_target {
             PointerTarget::None => (),
-            PointerTarget::Sun => self.render_sys.pointer_target = Point2 { x : 0.0f32, y : 0.0f32 },
+            PointerTarget::Sun => self.render_sys.pointer_target = Point2::new(0.0f32, 0.0f32),
             PointerTarget::Earth => self.render_sys.pointer_target = self.earth.pos(),
         }
  

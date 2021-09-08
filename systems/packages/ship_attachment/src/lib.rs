@@ -42,11 +42,11 @@ impl AttachmentSystem {
             |(id, attach)| {
                 let parent_pos = {
                     let parent = storage.get(attach.parent_id).unwrap();
-                    get_component::<Transform, _>(parent).pos
+                    get_component::<Transform, _>(parent).transform.translation
                 };
                 storage.mutate(*id,
                 |obj, _| {
-                    get_component_mut::<Transform, _>(obj).pos = parent_pos; // + offest.aware_of(parent_direction)
+                    get_component_mut::<Transform, _>(obj).transform.translation = parent_pos; // + offest.aware_of(parent_direction)
                 });
             }
         )

@@ -14,10 +14,8 @@ cfg-if = "*"
 simplelog = "*"
 
 sys_api = { path = "../sys_api" }
-collision = { path = "../collision" }
 ship_parts = { path = "../ship_parts" }
 std_ext = { path = "../std_ext" }
-cgmath_ext = { path = "../cgmath_ext" }
 game = { path = "../game" }
 
 [features]

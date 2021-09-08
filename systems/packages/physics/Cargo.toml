@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 # crates.io crates
-cgmath = { version = "0.18.0", features = ["serde"]}
+nalgebra = "0.29.0"
 serde = { version = "1.0.123", features = ["derive"]}
 # local crates
 systems_core = { path = "../systems_core" }

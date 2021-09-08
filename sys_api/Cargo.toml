@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 log = "*"
 glium = "0.29.0"
-cgmath = "0.18.0"
+nalgebra = "0.29.0"

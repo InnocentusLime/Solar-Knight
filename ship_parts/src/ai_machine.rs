@@ -2,7 +2,6 @@ use std::time::Duration;
 
 //use serde::{ Serialize, Deserialize };
 
-use cgmath_ext::rotate_vector_ox;
 use systems::teams::Team;
 use systems::ship_engine::Engines;
 use systems::hp_system::HpInfo;
@@ -24,11 +23,9 @@ pub enum AiTag {
 // TODO if everything goes well (all AI routines will be implementable like `turret_ai`, make 
 // `is_target_close` and `is_target_in_sight` to accept `Ship`
 mod ai {
-    use std::time::Duration;
-    use cgmath::{ Point2, InnerSpace, vec2 };
-    use crate::ai_machine::rotate_vector_ox;
+    use nalgebra::{ Point2 };
 
-    use super::{ Transform, ComponentAccess, get_component, get_component_mut };
+    use super::{ Transform, ComponentAccess, get_component };
 
     #[inline]
     pub fn is_target_close<Obj : ComponentAccess<Transform>>(
@@ -36,7 +33,7 @@ mod ai {
         target : Point2<f32>,
         distance : f32,
     ) -> bool {
-        let pos = get_component::<Transform, _>(obj).pos;
+        let pos = get_component::<Transform, _>(obj).position();
         let dir_vec = (target - pos).normalize();
         dir_vec.magnitude() <= distance
     }
@@ -48,33 +45,8 @@ mod ai {
         view_angle : f32,
     ) -> bool {
         let transform = get_component::<Transform, _>(obj);
-        let dir_vec = target - transform.pos;
-        let ang = transform.direction().angle(dir_vec);
-        ang.0.abs() <= view_angle / 2.0f32
-    }
-
-    #[inline]
-    pub fn rotate_towards<Obj : ComponentAccess<Transform>>(
-        obj : &mut Obj,
-        target : Point2<f32>,
-        angular_speed : f32,
-        dt : Duration,
-    ) {
-        let transform = get_component_mut(obj);
-
-        let dir_vec = (target - transform.pos).normalize();
-        let ang = transform.direction().angle(dir_vec);
-
-        if ang.0.abs() > angular_speed * dt.as_secs_f32() {
-            let (c, s) =
-                if ang.0 > 0.0f32 {
-                    ((angular_speed * dt.as_secs_f32()).cos(), (angular_speed * dt.as_secs_f32()).sin())
-                } else {
-                    ((angular_speed * dt.as_secs_f32()).cos(), -(angular_speed * dt.as_secs_f32()).sin())
-                } 
-            ;
-            transform.set_direction(rotate_vector_ox(transform.direction(), vec2(c, s)));
-        } else { transform.set_direction(dir_vec); }
+        let ang = transform.angle_to(target);
+        ang.angle().abs() <= view_angle / 2.0f32
     }
 }
 
@@ -90,14 +62,14 @@ where
     Host::Object : ComponentAccess<Transform> + ComponentAccess<Guns> + ComponentAccess<Team>,
     Observer : MutationObserver<Host>,
 {
-    let target = get_component::<Transform, _>(storage.get(0).unwrap()).pos;
+    let target = get_component::<Transform, _>(storage.get(0).unwrap()).position();
 
     storage.mutate(me, |obj, _| {
         if ai::is_target_close(obj, target, 1.5f32) {
             if ai::is_target_in_sight(obj, target, std::f32::consts::TAU / 8.0f32) {
                 bullet_system.shoot_from_gun_ship(obj, me, 0);
             }
-            ai::rotate_towards(obj, target, std::f32::consts::TAU / 4.0f32, dt)
+            get_component_mut::<Transform, _>(obj).rotate_towards(target, std::f32::consts::TAU / 4.0f32, dt);
         }
     });
 }
@@ -115,7 +87,8 @@ where
     Observer : MutationObserver<Host>,
 {
     storage.mutate(me, |obj, _| {
-        ai::rotate_towards(obj, earth.pos(), std::f32::consts::TAU / 16.0, dt)
+        get_component_mut::<Transform, _>(obj)
+        .rotate_towards(earth.pos(), std::f32::consts::TAU / 16.0, dt)
     });
 }
 
@@ -131,7 +104,7 @@ where
     Host::Object : ComponentAccess<Transform> + ComponentAccess<Engines>,
     Observer : MutationObserver<Host>,
 {
-    let target = get_component::<Transform, _>(storage.get(0).unwrap()).pos;
+    let target = get_component::<Transform, _>(storage.get(0).unwrap()).position();
 
     storage.mutate(me, |obj, _| {
         if ai::is_target_close(obj, target, 0.8f32) {
@@ -139,7 +112,7 @@ where
         } else { 
             get_component_mut::<Engines, _>(obj).engines[0].set_level(3); 
         }
-        ai::rotate_towards(obj, target, std::f32::consts::TAU * 2.0, dt)
+        get_component_mut::<Transform, _>(obj).rotate_towards(target, std::f32::consts::TAU * 2.0, dt)
     });
 }
 

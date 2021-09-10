@@ -84,7 +84,7 @@ impl CollisionSystem {
         Obj : ComponentAccess<Transform> + ComponentAccess<CollisionInfo>,
     {
         let model = get_component::<CollisionInfo, _>(obj).model;
-        let transform = &get_component::<Transform, _>(obj).transform;
+        let transform = &get_component::<Transform, _>(obj).full_transform();
 
         let shape = self.colliders.decypher(model);
         let other_shape = self.colliders.decypher(other_model);

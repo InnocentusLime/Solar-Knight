@@ -6,19 +6,30 @@ pub const VECTOR_NORMALIZATION_RANGE : f32 = 0.0001f32;
 #[derive(Clone, Copy, Debug)]
 pub struct Transform {
     pub transform : Isometry2<f32>,
+    pub origin_offset : Vector2<f32>,
 }
 
 impl Transform {
+    pub const fn new_with_origin(transform : Isometry2<f32>, origin_offset : Vector2<f32>) -> Self {
+        Transform {
+            transform,
+            origin_offset,
+        }
+    }
+    
     pub const fn new(transform : Isometry2<f32>) -> Self {
         Transform {
             transform,
+            origin_offset : Vector2::new(0.0f32, 0.0f32),
         }
     }
 
     #[inline]
     pub fn model_mat(&self, (width, height) : (f32, f32)) -> Matrix4<f32> {
+        let full_tf = self.full_transform();
+
         let mut mat =
-            self.transform.rotation
+            full_tf.rotation
             .to_rotation_matrix()
             .matrix()
             .fixed_resize(0.0f32)
@@ -26,14 +37,18 @@ impl Transform {
         mat[(2, 2)] = 1.0f32;
         mat[(3, 3)] = 1.0f32;
         
-        Translation { vector : self.transform.translation.vector.push(0.0f32) }
-        .to_homogeneous() *
+        Translation { vector : full_tf.translation.vector.push(0.0f32) }.to_homogeneous() *
         mat *
         Matrix4::new_nonuniform_scaling_wrt_point(
             &Vector3::new(width, height, 1.0f32),
             &Point3::new(0.0f32, 0.0f32, 0.0f32)
         )
     }
+
+    #[inline]
+    pub fn full_transform(&self) -> Isometry2<f32> {
+        self.transform * Translation { vector : self.origin_offset }
+    } 
     
     #[inline]
     pub fn set_direction_angle(&mut self, ang : f32) {

@@ -13,6 +13,7 @@ use systems_core::{ ComponentAccess, get_component, get_component_mut, Observati
 use ship_transform::Transform;
 use sys_api::graphics_init::PLAYER_BULLET_LIMIT;
 use std_ext::duration_ext::*;
+use sys_api::graphics_init::SCREEN_WIDTH;
 
 pub const VECTOR_NORMALIZATION_RANGE : f32 = 0.0001f32;
 pub const TESTER_BULLET_SIZE : (f32, f32) = (0.06f32, 0.09f32);
@@ -57,7 +58,6 @@ impl Bullet {
     
     #[inline]
     pub fn size(&self) -> (f32, f32) {
-        use sys_api::graphics_init::SCREEN_WIDTH;
         match self.kind {
             BulletData::TestBullet => (0.09f32, 0.06f32),
             BulletData::LaserBall => (0.03f32, 0.03f32),
@@ -211,10 +211,13 @@ impl BulletSystem {
             BulletKind::SpinningLaser => {
                 self.spawn(        
                     Bullet {
-                        transform : Transform::new(Isometry2 {
-                            rotation : bullet_dir,
-                            translation : bullet_pos.into(),
-                        }),
+                        transform : Transform::new_with_origin(
+                            Isometry2 {
+                                rotation : bullet_dir,
+                                translation : bullet_pos.into(),
+                            },
+                            Vector2::new(SCREEN_WIDTH / 1.5f32, 0.0f32)
+                        ),
                         team : shooter_team,
                         kind : BulletData::SpinningLaser,
                         lifetime : Duration::from_secs(1),
@@ -225,10 +228,13 @@ impl BulletSystem {
             BulletKind::LaserBeam => {
                 self.spawn(        
                     Bullet {
-                        transform : Transform::new(Isometry2 {
-                            rotation : bullet_dir,
-                            translation : bullet_pos.into(),
-                        }),
+                        transform : Transform::new_with_origin(
+                            Isometry2 {
+                                rotation : bullet_dir,
+                                translation : bullet_pos.into(),
+                            },
+                            Vector2::new(SCREEN_WIDTH / 1.5f32, 0.0f32)
+                        ),
                         team : shooter_team,
                         kind : BulletData::LaserBeam,
                         lifetime : Duration::from_secs(3),
@@ -343,7 +349,7 @@ impl BulletSystem {
                                     *get_component::<Team, _>(obj) != bullet.team &&
                                     get_component::<HpInfo, _>(obj).is_alive() &&
                                     //target_aabb.collision_test(my_aabb) && 
-                                    collision.check(obj, CollisionModelIndex::BulletTester, &bullet.transform.transform)
+                                    collision.check(obj, CollisionModelIndex::BulletTester, &bullet.transform.full_transform())
                                 {
                                     get_component_mut::<HpInfo, _>(obj).damage(1);
                                     bullet.lifetime = <Duration as DurationExt>::my_zero();
@@ -364,7 +370,7 @@ impl BulletSystem {
                                     *get_component::<Team, _>(obj) != bullet.team &&
                                     get_component::<HpInfo, _>(obj).is_alive() &&
                                     //target_aabb.collision_test(my_aabb) && 
-                                    collision.check(obj, CollisionModelIndex::LaserBall, &bullet.transform.transform)
+                                    collision.check(obj, CollisionModelIndex::LaserBall, &bullet.transform.full_transform())
                                 {
                                     get_component_mut::<HpInfo, _>(obj).damage(1);
                                     bullet.lifetime = <Duration as DurationExt>::my_zero();
@@ -391,7 +397,7 @@ impl BulletSystem {
                                     *get_component::<Team, _>(obj) != bullet.team &&
                                     get_component::<HpInfo, _>(obj).is_alive() &&
                                     //target_aabb.collision_test(my_aabb) && 
-                                    collision.check(obj, CollisionModelIndex::LaserBeam, &bullet.transform.transform)
+                                    collision.check(obj, CollisionModelIndex::LaserBeam, &bullet.transform.full_transform())
                                 {
                                     get_component_mut::<HpInfo, _>(obj).damage(1);
                                 } 
@@ -419,7 +425,7 @@ impl BulletSystem {
                                     *get_component::<Team, _>(obj) != bullet.team &&
                                     get_component::<HpInfo, _>(obj).is_alive() &&
                                     //target_aabb.collision_test(my_aabb) && 
-                                    collision.check(obj, CollisionModelIndex::LaserBeam, &bullet.transform.transform)
+                                    collision.check(obj, CollisionModelIndex::LaserBeam, &bullet.transform.full_transform())
                                 {
                                     get_component_mut::<HpInfo, _>(obj).damage(1);
                                 } 
@@ -481,7 +487,7 @@ impl BulletSystem {
                                     *get_component::<Team, _>(obj) != bullet.team &&
                                     get_component::<HpInfo, _>(obj).is_alive() &&
                                     //target_aabb.collision_test(my_aabb) && 
-                                    collision.check(obj, CollisionModelIndex::BulletTester, &bullet.transform.transform)
+                                    collision.check(obj, CollisionModelIndex::BulletTester, &bullet.transform.full_transform())
                                 {
                                     get_component_mut::<HpInfo, _>(obj).damage(1);
                                     bullet.lifetime = <Duration as DurationExt>::my_zero();

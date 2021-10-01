@@ -39,7 +39,7 @@ impl PhysicsSystem {
 
     fn solve_collisions<Host, Observer>(
         &mut self, 
-        _observation : &mut Observation<Observer, Host>, 
+        observation : &mut Observation<Observer, Host>, 
     )
     where
         Host : Storage,
@@ -47,6 +47,14 @@ impl PhysicsSystem {
         Observer : MutationObserver<Host>,
     {
         /* TODO */
+        for colliding_obj_id in 0..observation.capacity() {
+            // TODO optimize this with some data structure
+            for collider_obj_id in 0..observation.capacity() {
+                if (colliding_obj_id == collider_obj_id) { continue; }
+
+                /* collision resolving code for the two objects */ 
+            }
+        }
     }
 
 

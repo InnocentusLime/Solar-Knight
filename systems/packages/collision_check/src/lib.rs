@@ -1,6 +1,7 @@
 use nalgebra::{ Vector2, Isometry2 };
 use parry2d::shape::{ Cuboid, Shape };
-use parry2d::query::intersection_test;
+use parry2d::query::{ intersection_test, contact };
+use parry2d::query::contact::Contact;
 use parry2d::bounding_volume::AABB;
 
 use ship_transform::Transform;
@@ -90,6 +91,32 @@ impl CollisionSystem {
         let other_shape = self.colliders.decypher(other_model);
 
         intersection_test(transform, shape, other_transform, other_shape).unwrap()
+    }
+
+    // TODO the `other` argument should be a another type (`Obj2`)
+    // this is currently blocked purely because of the way `Bullets` are
+    // implemented
+    pub fn check_contact<Obj>(
+        &self, 
+        obj : &Obj,
+        other_model : CollisionModelIndex, other_transform : &Isometry2<f32>
+    ) -> Option<Contact>
+    where
+        Obj : ComponentAccess<Transform> + ComponentAccess<CollisionInfo>,
+    {
+        const CONTACT_EPS : f32 = 0.00001f32;
+
+        let model = get_component::<CollisionInfo, _>(obj).model;
+        let transform = &get_component::<Transform, _>(obj).full_transform();
+
+        let shape = self.colliders.decypher(model);
+        let other_shape = self.colliders.decypher(other_model);
+
+        contact(
+            transform, shape, 
+            other_transform, other_shape,
+            CONTACT_EPS
+        ).unwrap()
     }
 
     pub fn get_aabb<Obj>(&self, obj : &Obj) -> AABB

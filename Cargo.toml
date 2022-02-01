@@ -1,2 +1,3 @@
 [workspace]
-members = ["ship_parts", "std_ext", "sys_api", "game_bootstrap", "text_render", "pack", "loaders", "systems"]
+resolver = "2"
+members = ["bevy_game"]

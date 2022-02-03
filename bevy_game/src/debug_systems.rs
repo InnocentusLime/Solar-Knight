@@ -60,7 +60,20 @@ pub mod layer_debug {
     pub struct DebuggerPlugin;
 
     impl Plugin for DebuggerPlugin {
-        fn build(&self, app : &mut App) {
+        fn build(&self, _app : &mut App) {
+            
+        }
+    }
+}
+
+pub mod ship_world_debug {
+    use bevy::prelude::*;
+    pub use crate::ship::ShipConfig;
+    
+    pub struct DebuggerPlugin;
+
+    impl Plugin for DebuggerPlugin {
+        fn build(&self, _app : &mut App) {
             
         }
     }
@@ -73,6 +86,7 @@ use bevy_inspector_egui::{ InspectorPlugin, widgets::ResourceInspector, Inspecta
 pub struct DebuggerConfigs {
     rapier_debug : ResourceInspector<rapier_debug::RapierDebugConfig>,
     layer_debug : ResourceInspector<layer_debug::LayerVisibilityFlags>,
+    ship_world_debug : ResourceInspector<ship_world_debug::ShipConfig>,
 }
 
 pub struct GameDebugPlugin;
@@ -82,6 +96,7 @@ impl Plugin for GameDebugPlugin {
         app
         .add_plugin(rapier_debug::DebuggerPlugin)
         .add_plugin(layer_debug::DebuggerPlugin)
+        .add_plugin(ship_world_debug::DebuggerPlugin)
         .add_plugin(InspectorPlugin::<DebuggerConfigs>::new());
     }
 }

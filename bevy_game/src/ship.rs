@@ -1,11 +1,25 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
+use bevy_inspector_egui::Inspectable;
 
+// TODO wire up to collision daemon
 use crate::layer_system::{ Layer, LayerComponent };
+
+#[derive(Inspectable)]
+pub struct ShipConfig {
+    environment_friction : f32,
+}
+
+impl ShipConfig {
+    pub fn new() -> Self {
+        ShipConfig {
+            environment_friction : 0.53f32,
+        }
+    }
+}
 
 // Resources essential for ships
 pub struct ShipResources {
-    environment_friction : f32,
     player_texture : Handle<Image>,
     basic_enemy_texture : Handle<Image>,
 }
@@ -15,22 +29,19 @@ impl ShipResources {
     fn load_routine(
         world : &mut World,
     ) {
-        if !world.contains_resource::<Self>() {
-            let asset_server = world.get_resource::<AssetServer>().unwrap();
-            let this = 
-                ShipResources {
-                    environment_friction : 0.53f32,
-                    player_texture : asset_server.load("textures/player_ship.png"),
-                    basic_enemy_texture : asset_server.load("textures/enemy_ship.png"),
-                }
-            ;
+        let asset_server = world.get_resource::<AssetServer>().unwrap();
+        let this = 
+            ShipResources {
+                player_texture : asset_server.load("textures/player_ship.png"),
+                basic_enemy_texture : asset_server.load("textures/enemy_ship.png"),
+            }
+        ;
 
-            world.insert_resource(this);
-        }
+        world.insert_resource(this);
     }
 }
 
-#[derive(Component)]
+#[derive(Clone, Copy, Component)]
 pub struct ShipTag;
 
 #[derive(Bundle)]
@@ -51,8 +62,6 @@ impl ShipBundle {
     pub fn test_ship(
         ship_resources : &ShipResources,
     ) -> Self {
-        const SHIP_LAYER_OFFSET : f32 = 2.0f32;
-
         let mut rigid_body = RigidBodyBundle::default();
         rigid_body.mass_properties.local_mprops.inv_mass = 1.0f32 / 4.0f32;
         rigid_body.mass_properties.flags |= RigidBodyMassPropsFlags::ROTATION_LOCKED;
@@ -63,7 +72,7 @@ impl ShipBundle {
             sync : ColliderPositionSync::Discrete,
             sprite_bundle : SpriteBundle {
                 transform : 
-                    Transform::from_xyz(0.0f32, 0.0f32, SHIP_LAYER_OFFSET)
+                    Transform::identity()
                     .with_scale(Vec3::new(0.065f32, 0.065f32, 1.0f32))
                 ,
                 texture : ship_resources.player_texture.clone(),
@@ -87,7 +96,7 @@ impl ShipBundle {
 }
 
 fn space_friction_system(
-    ship_reses : Res<ShipResources>,
+    ship_reses : Res<ShipConfig>,
     mut query : Query<(&mut RigidBodyForcesComponent, &mut RigidBodyVelocityComponent), With<ShipTag>>,
 ) {
     for (mut force_info, velocity) in query.iter_mut() {
@@ -101,6 +110,8 @@ pub struct ShipPlugin;
 impl Plugin for ShipPlugin {
     fn build(&self, app : &mut App) {
         ShipResources::load_routine(&mut app.world);
-        app.add_system(space_friction_system);
+        app
+        .add_system(space_friction_system)
+        .insert_resource(ShipConfig::new());
     }
 }

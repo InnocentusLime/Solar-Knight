@@ -1,7 +1,7 @@
 use bevy::prelude::*;
-use strum::{ IntoEnumIterator, VariantNames };
+use strum::IntoEnumIterator;
 use strum_macros::{ EnumIter, IntoStaticStr };
-use bevy_inspector_egui::{ Inspectable, RegisterInspectable, Context, egui::Ui };
+use bevy_inspector_egui::{ Inspectable, Context, egui::Ui };
 
 #[derive(Clone, Copy, Debug, Inspectable, EnumIter, IntoStaticStr)]
 pub enum Layer {
@@ -38,8 +38,8 @@ impl Inspectable for LayerVisibilityFlags {
     fn ui(
         &mut self,
         ui : &mut Ui,
-        options : Self::Attributes,
-        context : &mut Context,
+        _options : Self::Attributes,
+        _context : &mut Context,
     ) -> bool {
         ui.vertical(|ui| {
             Layer::iter()
@@ -52,7 +52,8 @@ impl Inspectable for LayerVisibilityFlags {
     }
 }
 
-
+// FIXME it's constantly setting the value.
+// That's "stoopid".
 pub fn layer_system(
     layer_flags : Res<LayerVisibilityFlags>,
     mut query : Query<(&mut Transform, &LayerComponent)>, 
@@ -72,7 +73,7 @@ impl Plugin for LayerPlugin {
     fn build(&self, app : &mut App) {
         app
         .insert_resource(LayerVisibilityFlags {
-            layer_flags : Layer::iter().map(|x| true).collect(),
+            layer_flags : Layer::iter().map(|_| true).collect(),
         })
         .add_system(layer_system);
     }

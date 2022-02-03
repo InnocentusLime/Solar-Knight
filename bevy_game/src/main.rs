@@ -4,16 +4,19 @@ use bevy::input::{ keyboard::KeyCode, Input };
 
 use bevy_rapier2d::prelude::*;
 use bevy_inspector_egui::{ WorldInspectorPlugin, InspectableRegistry };
-use bevy_egui::{ egui, EguiContext, EguiPlugin };
 
+mod bullet;
 mod ship;
 mod player_ship;
 mod mouse_pos;
 mod debug_systems;
 mod layer_system;
 mod inspector_impls;
+mod collision_daemon;
+// TODO mod damage
 
 use crate::ship::{ ShipPlugin, ShipResources };
+use crate::bullet::{ BulletPlugin, BulletResources, BulletBundle };
 use crate::player_ship::{ PlayerShipPlugin, PlayerShipBundle };
 use crate::layer_system::{ Layer, LayerComponent, LayerPlugin };
 use crate::debug_systems::GameDebugPlugin;
@@ -32,6 +35,7 @@ fn test_setup(
     mut commands : Commands,
     mut rapier_config : ResMut<RapierConfiguration>,
     ship_reses : Res<ShipResources>,
+    bullet_reses : Res<BulletResources>,
     asset_server : Res<AssetServer>,
 ) {
     rapier_config.gravity = vector!(0.0f32, 0.0f32);
@@ -68,11 +72,16 @@ fn test_setup(
     );
 
     commands.spawn()
-    .insert(Name::new("Player"))
+    .insert_bundle(BulletBundle::test_bullet(&bullet_reses, 0.5f32, 0.0f32))
+    ;
+    
+    commands.spawn()
     .insert_bundle(PlayerShipBundle::new(&ship_reses))
+    .insert(Name::new("Player"))
     ;
   
     commands.spawn()
+    .insert(Name::new("Bottom wall"))
     .insert_bundle(ColliderBundle {
         shape : ColliderShape::cuboid(3.0, 1.0).into(),
         position : Isometry::new(
@@ -86,6 +95,7 @@ fn test_setup(
     ;
     
     commands.spawn()
+    .insert(Name::new("Top wall"))
     .insert_bundle(ColliderBundle {
         shape : ColliderShape::cuboid(3.0, 1.0).into(),
         position : Isometry::new(
@@ -99,6 +109,7 @@ fn test_setup(
     ;
     
     commands.spawn()
+    .insert(Name::new("Left wall"))
     .insert_bundle(ColliderBundle {
         shape : ColliderShape::cuboid(3.0, 1.0).into(),
         position : Isometry::new(
@@ -111,6 +122,7 @@ fn test_setup(
     ;
     
     commands.spawn()
+    .insert(Name::new("Right wall"))
     .insert_bundle(ColliderBundle {
         shape : ColliderShape::cuboid(3.0, 1.0).into(),
         position : Isometry::new(
@@ -149,6 +161,7 @@ fn load_gameplay_plugins(app : &mut App) {
     .add_plugin(RapierPhysicsPlugin::<()>::default())
     .add_plugin(LayerPlugin)
     .add_plugin(ShipPlugin)
+    .add_plugin(BulletPlugin)
     .add_plugin(PlayerShipPlugin);
 }
 

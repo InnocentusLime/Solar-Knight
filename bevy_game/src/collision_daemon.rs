@@ -1,77 +1,86 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
+use std::ops::AddAssign;
 use std::collections::HashMap;
 
-pub trait CollisionVictimData : Component + Copy {
-    type Input : Copy;
+#[derive(Default, Component)]
+pub struct CollisionMarker;
 
-    fn take_damage(&mut self, input : Self::Input);
-}
+pub trait DamageInflictorComponent : Component + Copy {
+    type Output : Default + Component + AddAssign;
 
-pub trait CollisionInflictorData : Component + Copy {
-    type Output : Copy;
-
-    fn successful_impact(&mut self);
     fn compute_damage(&self) -> Self::Output;
 }
 
 // TODO take collisions into account too
-pub fn collision_daemon<InflictorData, VictimData>(
-    mut victim_entities : Query<(Entity, &mut VictimData)>,
-    mut inflictor_entities : Query<(Entity, &mut InflictorData)>,
-    mut inflictors : Local<HashMap<Entity, InflictorData>>,
-    mut victims : Local<HashMap<Entity, VictimData>>,
+pub fn collision_daemon<Inflictor : DamageInflictorComponent>(
+    inflictor_entities : Query<(Entity, &Inflictor)>,
+    mut inflictors : Local<HashMap<Entity, (bool, Inflictor)>>,
+    mut victims : Local<HashMap<Entity, Inflictor::Output>>,
     mut events : EventReader<IntersectionEvent>,
+    mut commands : Commands,
 ) 
-where
-    InflictorData : CollisionInflictorData,
-    VictimData : CollisionVictimData<Input = InflictorData::Output>,
 {
-    victims.clear();
-    victim_entities.iter()
-    .for_each(|(entity, x)| { victims.insert(entity, *x); });
-
     inflictors.clear();
     inflictor_entities.iter()
-    .for_each(|(entity, x)| { inflictors.insert(entity, *x); });
+    .for_each(|(entity, x)| { inflictors.insert(entity, (false, *x)); });
 
     for (body_a, body_b) in 
         events.iter()
         .map(|x| (x.collider1.entity(), x.collider2.entity())) 
     {
-        if let 
-            (Some(victim), Some(inflictor)) = 
-            (victims.get_mut(&body_a), inflictors.get_mut(&body_b)) 
+        if let Some((collided, inflictor)) = inflictors.get_mut(&body_b)
         {
-            inflictor.successful_impact();
-            victim.take_damage(inflictor.compute_damage());
+            if !*collided {
+                *collided = true;
+                commands.entity(body_b)
+                .insert(CollisionMarker::default());
+            }
+
+            *victims.entry(body_a).or_insert(Inflictor::Output::default()) += 
+                inflictor.compute_damage()
+            ;
         }
         
-        if let 
-            (Some(victim), Some(inflictor)) = 
-            (victims.get_mut(&body_b), inflictors.get_mut(&body_a)) 
+        if let Some((collided, inflictor)) = inflictors.get_mut(&body_a)
         {
-            inflictor.successful_impact();
-            victim.take_damage(inflictor.compute_damage());
+            if !*collided {
+                *collided = true;
+                commands.entity(body_a)
+                .insert(CollisionMarker::default());
+            }
+
+            *victims.entry(body_b).or_insert(Inflictor::Output::default()) += 
+                inflictor.compute_damage()
+            ;
         }
     }
 
-    victim_entities.iter_mut().for_each(|(entity, mut x)| *x = victims[&entity]);
-    inflictor_entities.iter_mut().for_each(|(entity, mut x)| *x = inflictors[&entity]);
+    victims.drain().for_each(|(entity, result)| { commands.entity(entity).insert(result); });
 }
 
-pub struct CollisionDaemonPlugin<InflictorData, VictimData>(std::marker::PhantomData<fn(&mut InflictorData, &mut VictimData)>);
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, SystemLabel)]
+pub struct CollisionDaemon;
 
-impl<InflictorData, VictimData> Plugin for CollisionDaemonPlugin<InflictorData, VictimData> 
+pub struct CollisionDaemonPlugin<Inflictor : DamageInflictorComponent>(std::marker::PhantomData<fn(&mut Inflictor)>);
+
+impl<Inflictor> CollisionDaemonPlugin<Inflictor> 
 where
-    InflictorData : CollisionInflictorData,
-    VictimData : CollisionVictimData<Input = InflictorData::Output>,
+    Inflictor : DamageInflictorComponent
+{
+    pub fn new() -> Self { CollisionDaemonPlugin(std::marker::PhantomData) }
+}
+
+impl<Inflictor> Plugin for CollisionDaemonPlugin<Inflictor> 
+where
+    Inflictor : DamageInflictorComponent
 {
     fn build(&self, app : &mut App) {
         app.add_system_to_stage(
             CoreStage::PostUpdate, 
-            collision_daemon::<InflictorData, VictimData>
+            collision_daemon::<Inflictor>
+            .label(CollisionDaemon)
         );
     }
 }

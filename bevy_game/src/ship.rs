@@ -2,7 +2,8 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use bevy_inspector_egui::Inspectable;
 
-// TODO wire up to collision daemon
+use crate::collision_daemon::CollisionDaemon;
+use crate::health::{ Damage, HealthComponent };
 use crate::layer_system::{ Layer, LayerComponent };
 
 #[derive(Inspectable)]
@@ -56,6 +57,7 @@ pub struct ShipBundle {
     #[bundle]
     rigid_body_bundle : RigidBodyBundle,
     layer : LayerComponent,
+    health : HealthComponent,
 }
 
 impl ShipBundle {
@@ -91,17 +93,30 @@ impl ShipBundle {
                 layer : Layer::ShipLayer,
                 internal_offset : 0.0f32,
             },
+            health : HealthComponent {
+                health : 3,
+            },
         }
     }
 }
 
-fn space_friction_system(
+pub fn space_friction_system(
     ship_reses : Res<ShipConfig>,
     mut query : Query<(&mut RigidBodyForcesComponent, &mut RigidBodyVelocityComponent), With<ShipTag>>,
 ) {
     for (mut force_info, velocity) in query.iter_mut() {
         let v = velocity.linvel;
         force_info.force -= (ship_reses.environment_friction * v.magnitude()) * v;
+    }
+}
+
+pub fn ship_damage_system(
+    mut damaged : Query<(Entity, &mut HealthComponent, &Damage), With<ShipTag>>,
+    mut commands : Commands,
+) {
+    for (entity, mut health, damage) in damaged.iter_mut() {
+        health.take_damage(*damage);
+        commands.entity(entity).remove::<Damage>();
     }
 }
 
@@ -112,6 +127,10 @@ impl Plugin for ShipPlugin {
         ShipResources::load_routine(&mut app.world);
         app
         .add_system(space_friction_system)
+        .add_system_to_stage(
+            CoreStage::PostUpdate, 
+            ship_damage_system.after(CollisionDaemon)
+        )
         .insert_resource(ShipConfig::new());
     }
 }

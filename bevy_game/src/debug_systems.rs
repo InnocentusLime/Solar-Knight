@@ -79,6 +79,13 @@ pub mod ship_world_debug {
     }
 }
 
+/*
+pub mod framepace_debug {
+    use bevy::prelude::*;
+    use bevy_inspector_egui::{ WorldInspectorPlugin, InspectableRegistry };
+}
+*/
+
 use bevy::prelude::{ Plugin, App };
 use bevy_inspector_egui::{ InspectorPlugin, widgets::ResourceInspector, Inspectable };
 

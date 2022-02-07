@@ -1,10 +1,14 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 use bevy::render::camera::ScalingMode;
 use bevy::input::{ keyboard::KeyCode, Input };
 
 use bevy_rapier2d::prelude::*;
+use bevy_framepace::{ FramepacePlugin, FramerateLimit };
 use bevy_inspector_egui::{ WorldInspectorPlugin, InspectableRegistry };
 
+mod health;
 mod bullet;
 mod ship;
 mod player_ship;
@@ -13,10 +17,11 @@ mod debug_systems;
 mod layer_system;
 mod inspector_impls;
 mod collision_daemon;
-// TODO mod damage
 
+use crate::collision_daemon::CollisionDaemonPlugin;
+use crate::health::HealthComponent;
 use crate::ship::{ ShipPlugin, ShipResources };
-use crate::bullet::{ BulletPlugin, BulletResources, BulletBundle };
+use crate::bullet::{ BulletPlugin, BulletResources, BulletAttributes };
 use crate::player_ship::{ PlayerShipPlugin, PlayerShipBundle };
 use crate::layer_system::{ Layer, LayerComponent, LayerPlugin };
 use crate::debug_systems::GameDebugPlugin;
@@ -27,9 +32,7 @@ const ASPECT_RATIO : f32 = WINDOW_WIDTH / WINDOW_HEIGHT;
 
 static TITLE : &'static str = "Solar Knight";
 
-
 // TODO shooting
-// TODO hp
 // TODO some enemies
 fn test_setup(
     mut commands : Commands,
@@ -71,9 +74,7 @@ fn test_setup(
         }
     );
 
-    commands.spawn()
-    .insert_bundle(BulletBundle::test_bullet(&bullet_reses, 0.5f32, 0.0f32))
-    ;
+    bullet::spawn_test_bullet(&mut commands, &bullet_reses, 0.5f32, 0.0f32);
     
     commands.spawn()
     .insert_bundle(PlayerShipBundle::new(&ship_reses))
@@ -151,7 +152,11 @@ fn create_app_base() -> App {
     let mut app = App::new();
 
     app.insert_resource(window_descriptor)
-    .add_plugins(DefaultPlugins);
+    .add_plugins(DefaultPlugins)
+    .add_plugin(
+        FramepacePlugin::framerate(60)
+        .without_warnings()
+    );
 
     app
 }
@@ -161,6 +166,7 @@ fn load_gameplay_plugins(app : &mut App) {
     .add_plugin(RapierPhysicsPlugin::<()>::default())
     .add_plugin(LayerPlugin)
     .add_plugin(ShipPlugin)
+    .add_plugin(CollisionDaemonPlugin::<BulletAttributes>::new())
     .add_plugin(BulletPlugin)
     .add_plugin(PlayerShipPlugin);
 }
@@ -175,12 +181,15 @@ fn load_debug_plugins(app : &mut App) {
         .unwrap()
     ;
     registry.register::<LayerComponent>();
+    registry.register::<BulletAttributes>();
+    registry.register::<HealthComponent>();
     registry.register_raw(|comp : &mut ColliderPositionComponent, ui, ctx| {
         use inspector_impls::nalgebra::inspect_vec2;
         use bevy_inspector_egui::options::Vec2dAttributes;
 
         inspect_vec2(&mut comp.translation.vector, ui, Vec2dAttributes::default(), ctx)
     });
+    
     registry.register_raw(|comp : &mut RigidBodyPositionComponent, ui, ctx| {
         use inspector_impls::nalgebra::inspect_vec2;
         use bevy_inspector_egui::options::Vec2dAttributes;

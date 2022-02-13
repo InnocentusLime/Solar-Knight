@@ -1,33 +1,35 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use bevy_rapier2d::prelude::nalgebra::{ Unit, Complex };
+use bevy::ecs::system::EntityCommands;
 
 use crate::team::TeamComponent;
 use crate::mouse_pos::get_mouse_position;
-use crate::ship::{ ShipBundle, ShipResources };
+use crate::ship::{ ShipCommands, ShipResources };
 
 #[derive(Component)]
 pub struct PlayerShipTag;
 
-#[derive(Bundle)]
-pub struct PlayerShipBundle {
-    player_tag : PlayerShipTag,
-    #[bundle]
-    ship_bundle : ShipBundle,
+pub trait PlayerCommands<'w, 's> {
+    fn spawn_player<'a>(
+        &'a mut self,
+        ship_resources : &ShipResources,
+    ) -> EntityCommands<'w, 's, 'a>;
 }
 
-impl PlayerShipBundle {
-    pub fn new(
+impl<'w, 's> PlayerCommands<'w, 's> for Commands<'w, 's> {
+    fn spawn_player<'a>(
+        &'a mut self,
         ship_resources : &ShipResources,
-    ) -> Self {
-        PlayerShipBundle {
-            player_tag : PlayerShipTag,
-            ship_bundle : ShipBundle::test_ship(
-                ship_resources, 
-                TeamComponent::Earth
-            ),
-        }
-    } 
+    ) -> EntityCommands<'w, 's, 'a> {
+        let mut commands = self.spawn_test_ship(ship_resources, TeamComponent::Earth);
+
+        commands
+        .insert(PlayerShipTag)
+        .insert(Name::new("Player"));
+
+        commands
+    }
 }
 
 fn player_controls(

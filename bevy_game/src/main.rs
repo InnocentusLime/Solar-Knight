@@ -19,12 +19,13 @@ mod layer_system;
 mod inspector_impls;
 mod collision_daemon;
 
+use crate::bullet::BulletCommands;
 use crate::team::TeamComponent;
 use crate::collision_daemon::CollisionDaemonPlugin;
 use crate::health::HealthComponent;
 use crate::ship::{ ShipPlugin, ShipResources };
 use crate::bullet::{ BulletPlugin, BulletResources, BulletAttributes };
-use crate::player_ship::{ PlayerShipPlugin, PlayerShipBundle };
+use crate::player_ship::{ PlayerShipPlugin, PlayerCommands };
 use crate::layer_system::{ Layer, LayerComponent, LayerPlugin };
 use crate::debug_systems::GameDebugPlugin;
 
@@ -75,13 +76,9 @@ fn test_setup(
             internal_offset : 0.0f32,
         }
     );
-
-    bullet::spawn_test_bullet(&mut commands, &bullet_reses, 0.5f32, 0.0f32, TeamComponent::Hive);
-    
-    commands.spawn()
-    .insert_bundle(PlayerShipBundle::new(&ship_reses))
-    .insert(Name::new("Player"))
-    ;
+ 
+    commands.spawn_player(&ship_reses);
+    commands.spawn_test_bullet(&bullet_reses, 0.5f32, 0.0f32, TeamComponent::Hive);
   
     commands.spawn()
     .insert(Name::new("Bottom wall"))
@@ -90,7 +87,6 @@ fn test_setup(
         position : Isometry::new(
             [0.0f32, -2.0f32].into(),
             0.0f32,
-            //std::f32
         ).into(),
         ..ColliderBundle::default()
     })
@@ -104,7 +100,6 @@ fn test_setup(
         position : Isometry::new(
             [0.0f32, 2.0f32].into(),
             0.0f32,
-            //std::f32
         ).into(),
         ..ColliderBundle::default()
     })

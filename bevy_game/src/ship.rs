@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use bevy_inspector_egui::Inspectable;
+use bevy::ecs::system::EntityCommands;
 
 use crate::team::TeamComponent;
 use crate::collision_daemon::CollisionDaemon;
@@ -62,45 +63,59 @@ pub struct ShipBundle {
     health : HealthComponent,
 }
 
-impl ShipBundle {
-    pub fn test_ship(
+pub trait ShipCommands<'w, 's> {
+    fn spawn_test_ship<'a>(
+        &'a mut self,
         ship_resources : &ShipResources,
         team : TeamComponent,
-    ) -> Self {
+    ) -> EntityCommands<'w, 's, 'a>;
+}
+
+impl<'w, 's> ShipCommands<'w, 's> for Commands<'w, 's> {
+    fn spawn_test_ship<'a>(
+        &'a mut self,
+        ship_resources : &ShipResources,
+        team : TeamComponent,
+    ) -> EntityCommands<'w, 's, 'a> {
         let mut rigid_body = RigidBodyBundle::default();
         rigid_body.mass_properties.local_mprops.inv_mass = 1.0f32 / 4.0f32;
         rigid_body.mass_properties.flags |= RigidBodyMassPropsFlags::ROTATION_LOCKED;
 
-        ShipBundle {
-            team,
-            name : Name::new("test ship"),
-            tag : ShipTag,
-            sync : ColliderPositionSync::Discrete,
-            sprite_bundle : SpriteBundle {
-                transform : 
-                    Transform::identity()
-                    .with_scale(Vec3::new(0.065f32, 0.065f32, 1.0f32))
-                ,
-                texture : ship_resources.player_texture.clone(),
-                sprite : Sprite {
-                    custom_size : Some(Vec2::new(2.0f32, 2.0f32)),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            collider_bundle : ColliderBundle {
-                shape : ColliderShape::ball(0.065f32).into(),
-                ..ColliderBundle::default()
-            },
-            rigid_body_bundle : rigid_body,
-            layer : LayerComponent {
-                layer : Layer::ShipLayer,
-                internal_offset : 0.0f32,
-            },
-            health : HealthComponent {
-                health : 3,
-            },
-        }
+        let commands = 
+            self.spawn_bundle(
+                ShipBundle {
+                    team,
+                    name : Name::new("test ship"),
+                    tag : ShipTag,
+                    sync : ColliderPositionSync::Discrete,
+                    sprite_bundle : SpriteBundle {
+                        transform : 
+                            Transform::identity()
+                            .with_scale(Vec3::new(0.065f32, 0.065f32, 1.0f32))
+                        ,
+                        texture : ship_resources.player_texture.clone(),
+                        sprite : Sprite {
+                            custom_size : Some(Vec2::new(2.0f32, 2.0f32)),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                        },
+                    collider_bundle : ColliderBundle {
+                        shape : ColliderShape::ball(0.065f32).into(),
+                        ..ColliderBundle::default()
+                    },
+                    rigid_body_bundle : rigid_body,
+                    layer : LayerComponent {
+                        layer : Layer::ShipLayer,
+                        internal_offset : 0.0f32,
+                    },
+                    health : HealthComponent {
+                        health : 3,
+                    },
+                }
+            )
+        ;
+        commands
     }
 }
 

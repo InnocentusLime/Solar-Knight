@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use bevy_inspector_egui::Inspectable;
+use bevy::ecs::system::EntityCommands;
 
 use crate::team::TeamComponent;
 use crate::health::DamageComponent;
@@ -92,50 +93,64 @@ struct BaseBulletBundle {
     team : TeamComponent,
 }
 
-// TODO ext `Commands`?
-pub fn spawn_test_bullet(
-    commands : &mut Commands,
-    bullet_resources : &BulletResources,
-    x : f32, y : f32,
-    team : TeamComponent,
-) {
-    let mut rigid_body = RigidBodyBundle::default();
-    rigid_body.position.position.translation.vector = vector!(x, y);
-    rigid_body.mass_properties.flags |= RigidBodyMassPropsFlags::ROTATION_LOCKED;
+pub trait BulletCommands<'w, 's> {
+    fn spawn_test_bullet<'a>(
+        &'a mut self,
+        bullet_resources : &BulletResources,
+        x : f32, y : f32,
+        team : TeamComponent,
+    ) -> EntityCommands<'w, 's, 'a>;
+}
+
+impl<'w, 's> BulletCommands<'w, 's> for Commands<'w, 's> {
+    fn spawn_test_bullet<'a>(
+        &'a mut self,
+        bullet_resources : &BulletResources,
+        x : f32, y : f32,
+        team : TeamComponent,
+    ) -> EntityCommands<'w, 's, 'a> {
+        let mut rigid_body = RigidBodyBundle::default();
+        rigid_body.position.position.translation.vector = vector!(x, y);
+        rigid_body.mass_properties.flags |= RigidBodyMassPropsFlags::ROTATION_LOCKED;
        
-    commands.spawn_bundle(BaseBulletBundle {
-        team,
-        name : Name::new("test bullet"),
-        tag : BulletTag,
-        sync : ColliderPositionSync::Discrete,
-        sprite_bundle : SpriteBundle {
-            transform : 
-                Transform::identity()
-                .with_scale(Vec3::new(0.021f32, 0.043f32, 1.0f32))
-            ,
-            texture : bullet_resources.basic_bullet_texture.clone(),
-            sprite : Sprite {
-                custom_size : Some(Vec2::new(2.0f32, 2.0f32)),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        collider_bundle : ColliderBundle {
-            collider_type : ColliderType::Sensor.into(),
-            shape : ColliderShape::cuboid(0.021f32, 0.043f32).into(),
-            flags : ActiveEvents::INTERSECTION_EVENTS.into(),
-            ..ColliderBundle::default()
-        },
-        rigid_body_bundle : rigid_body,
-        layer : LayerComponent {
-            layer : Layer::ShipLayer,
-            internal_offset : 0.0f32,
-        },
-        attributes : BulletAttributes::new(
-            DamageComponent { plasma_damage : 1, },
-        ),
-    })
-    .insert(DespawnOnImpact);
+        let mut commands =
+            self.spawn_bundle(BaseBulletBundle {
+                team,
+                name : Name::new("test bullet"),
+                tag : BulletTag,
+                sync : ColliderPositionSync::Discrete,
+                sprite_bundle : SpriteBundle {
+                    transform : 
+                        Transform::identity()
+                        .with_scale(Vec3::new(0.021f32, 0.043f32, 1.0f32))
+                    ,
+                    texture : bullet_resources.basic_bullet_texture.clone(),
+                    sprite : Sprite {
+                        custom_size : Some(Vec2::new(2.0f32, 2.0f32)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                collider_bundle : ColliderBundle {
+                    collider_type : ColliderType::Sensor.into(),
+                    shape : ColliderShape::cuboid(0.021f32, 0.043f32).into(),
+                    flags : ActiveEvents::INTERSECTION_EVENTS.into(),
+                    ..ColliderBundle::default()
+                },
+                rigid_body_bundle : rigid_body,
+                layer : LayerComponent {
+                    layer : Layer::ShipLayer,
+                    internal_offset : 0.0f32,
+                },
+                attributes : BulletAttributes::new(
+                    DamageComponent { plasma_damage : 1, },
+                ),
+            })
+        ;
+        commands.insert(DespawnOnImpact);
+
+        commands
+    }
 }
 
 pub struct BulletPlugin;

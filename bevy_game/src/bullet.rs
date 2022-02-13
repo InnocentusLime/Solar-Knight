@@ -147,7 +147,9 @@ impl<'w, 's> BulletCommands<'w, 's> for Commands<'w, 's> {
                 ),
             })
         ;
-        commands.insert(DespawnOnImpact);
+        commands
+        .insert(DespawnOnImpact)
+        .insert(LifetimeTimerComponent(Timer::from_seconds(3.0f32, false)));
 
         commands
     }
@@ -159,7 +161,10 @@ impl Plugin for BulletPlugin {
     fn build(&self, app : &mut App) {
         BulletResources::load_routine(&mut app.world);
         app
-        .add_system(timed_out_entity_system)
+        .add_system_to_stage(
+            CoreStage::Last,
+            timed_out_entity_system
+        )
         .add_system_to_stage(
             CoreStage::Last, 
             despawn_on_impact_system

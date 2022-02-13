@@ -2,8 +2,9 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use bevy_rapier2d::prelude::nalgebra::{ Unit, Complex };
 
-use super::mouse_pos::get_mouse_position;
-use super::ship::{ ShipBundle, ShipResources };
+use crate::team::TeamComponent;
+use crate::mouse_pos::get_mouse_position;
+use crate::ship::{ ShipBundle, ShipResources };
 
 #[derive(Component)]
 pub struct PlayerShipTag;
@@ -21,7 +22,10 @@ impl PlayerShipBundle {
     ) -> Self {
         PlayerShipBundle {
             player_tag : PlayerShipTag,
-            ship_bundle : ShipBundle::test_ship(ship_resources),
+            ship_bundle : ShipBundle::test_ship(
+                ship_resources, 
+                TeamComponent::Earth
+            ),
         }
     } 
 }

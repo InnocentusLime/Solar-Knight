@@ -11,6 +11,7 @@ use bevy_inspector_egui::{ WorldInspectorPlugin, InspectableRegistry };
 mod health;
 mod bullet;
 mod ship;
+mod team;
 mod player_ship;
 mod mouse_pos;
 mod debug_systems;
@@ -18,6 +19,7 @@ mod layer_system;
 mod inspector_impls;
 mod collision_daemon;
 
+use crate::team::TeamComponent;
 use crate::collision_daemon::CollisionDaemonPlugin;
 use crate::health::HealthComponent;
 use crate::ship::{ ShipPlugin, ShipResources };
@@ -74,7 +76,7 @@ fn test_setup(
         }
     );
 
-    bullet::spawn_test_bullet(&mut commands, &bullet_reses, 0.5f32, 0.0f32);
+    bullet::spawn_test_bullet(&mut commands, &bullet_reses, 0.5f32, 0.0f32, TeamComponent::Hive);
     
     commands.spawn()
     .insert_bundle(PlayerShipBundle::new(&ship_reses))
@@ -166,7 +168,7 @@ fn load_gameplay_plugins(app : &mut App) {
     .add_plugin(RapierPhysicsPlugin::<()>::default())
     .add_plugin(LayerPlugin)
     .add_plugin(ShipPlugin)
-    .add_plugin(CollisionDaemonPlugin::<BulletAttributes>::new())
+    .add_plugin(CollisionDaemonPlugin::<BulletAttributes, TeamComponent>::new())
     .add_plugin(BulletPlugin)
     .add_plugin(PlayerShipPlugin);
 }
@@ -183,6 +185,7 @@ fn load_debug_plugins(app : &mut App) {
     registry.register::<LayerComponent>();
     registry.register::<BulletAttributes>();
     registry.register::<HealthComponent>();
+    registry.register::<TeamComponent>();
     registry.register_raw(|comp : &mut ColliderPositionComponent, ui, ctx| {
         use inspector_impls::nalgebra::inspect_vec2;
         use bevy_inspector_egui::options::Vec2dAttributes;

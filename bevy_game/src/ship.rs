@@ -2,8 +2,9 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use bevy_inspector_egui::Inspectable;
 
+use crate::team::TeamComponent;
 use crate::collision_daemon::CollisionDaemon;
-use crate::health::{ Damage, HealthComponent };
+use crate::health::{ DamageComponent, HealthComponent };
 use crate::layer_system::{ Layer, LayerComponent };
 
 #[derive(Inspectable)]
@@ -47,6 +48,7 @@ pub struct ShipTag;
 
 #[derive(Bundle)]
 pub struct ShipBundle {
+    team : TeamComponent,
     name : Name,
     tag : ShipTag,
     sync : ColliderPositionSync,
@@ -63,12 +65,14 @@ pub struct ShipBundle {
 impl ShipBundle {
     pub fn test_ship(
         ship_resources : &ShipResources,
+        team : TeamComponent,
     ) -> Self {
         let mut rigid_body = RigidBodyBundle::default();
         rigid_body.mass_properties.local_mprops.inv_mass = 1.0f32 / 4.0f32;
         rigid_body.mass_properties.flags |= RigidBodyMassPropsFlags::ROTATION_LOCKED;
 
         ShipBundle {
+            team,
             name : Name::new("test ship"),
             tag : ShipTag,
             sync : ColliderPositionSync::Discrete,
@@ -111,12 +115,12 @@ pub fn space_friction_system(
 }
 
 pub fn ship_damage_system(
-    mut damaged : Query<(Entity, &mut HealthComponent, &Damage), With<ShipTag>>,
+    mut damaged : Query<(Entity, &mut HealthComponent, &DamageComponent), With<ShipTag>>,
     mut commands : Commands,
 ) {
     for (entity, mut health, damage) in damaged.iter_mut() {
         health.take_damage(*damage);
-        commands.entity(entity).remove::<Damage>();
+        commands.entity(entity).remove::<DamageComponent>();
     }
 }
 

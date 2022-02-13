@@ -4,19 +4,19 @@ use bevy_inspector_egui::Inspectable;
 use std::ops::AddAssign;
 
 #[derive(Clone, Copy, Debug, Component, Inspectable)]
-pub struct Damage {
+pub struct DamageComponent {
     pub plasma_damage : u32,
 }
 
-impl Default for Damage {
+impl Default for DamageComponent {
     fn default() -> Self {
-        Damage {
+        DamageComponent {
             plasma_damage : 0,
         }
     }
 }
 
-impl AddAssign for Damage {
+impl AddAssign for DamageComponent {
     fn add_assign(&mut self, rhs : Self) {
         self.plasma_damage += rhs.plasma_damage;
     }
@@ -28,7 +28,7 @@ pub struct HealthComponent {
 }
 
 impl HealthComponent {
-    pub fn take_damage(&mut self, dmg : Damage) {
+    pub fn take_damage(&mut self, dmg : DamageComponent) {
         self.health = self.health.saturating_sub(dmg.plasma_damage);
     }
 }

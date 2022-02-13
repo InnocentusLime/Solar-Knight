@@ -2,9 +2,10 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use bevy_inspector_egui::Inspectable;
 
-use crate::health::Damage;
+use crate::team::TeamComponent;
+use crate::health::DamageComponent;
 use crate::layer_system::{ Layer, LayerComponent };
-use crate::collision_daemon::{ DamageInflictorComponent, CollisionMarker, CollisionDaemon };
+use crate::collision_daemon::{ CollisionInflictorComponent, CollisionMarker };
 
 pub struct BulletResources {
     basic_bullet_texture : Handle<Image>,
@@ -27,22 +28,22 @@ impl BulletResources {
 
 #[derive(Clone, Copy, Debug, Component, Inspectable)]
 pub struct BulletAttributes {
-    damage : Damage,
+    damage : DamageComponent,
 //  speed
 }
 
 impl BulletAttributes {
-    pub fn new(damage : Damage) -> Self {
+    pub fn new(damage : DamageComponent) -> Self {
         BulletAttributes {
             damage,
         }
     }
 }
 
-impl DamageInflictorComponent for BulletAttributes {
-    type Output = Damage;
+impl CollisionInflictorComponent for BulletAttributes {
+    type Output = DamageComponent;
 
-    fn compute_damage(&self) -> Damage { self.damage }
+    fn compute_effect(&self) -> Self::Output { self.damage }
 }
 
 #[derive(Clone, Copy, Component)]
@@ -88,19 +89,22 @@ struct BaseBulletBundle {
     rigid_body_bundle : RigidBodyBundle,
     layer : LayerComponent,
     attributes : BulletAttributes,
+    team : TeamComponent,
 }
 
 // TODO ext `Commands`?
 pub fn spawn_test_bullet(
     commands : &mut Commands,
     bullet_resources : &BulletResources,
-    x : f32, y : f32
+    x : f32, y : f32,
+    team : TeamComponent,
 ) {
     let mut rigid_body = RigidBodyBundle::default();
     rigid_body.position.position.translation.vector = vector!(x, y);
     rigid_body.mass_properties.flags |= RigidBodyMassPropsFlags::ROTATION_LOCKED;
        
     commands.spawn_bundle(BaseBulletBundle {
+        team,
         name : Name::new("test bullet"),
         tag : BulletTag,
         sync : ColliderPositionSync::Discrete,
@@ -128,7 +132,7 @@ pub fn spawn_test_bullet(
             internal_offset : 0.0f32,
         },
         attributes : BulletAttributes::new(
-            Damage { plasma_damage : 1, },
+            DamageComponent { plasma_damage : 1, },
         ),
     })
     .insert(DespawnOnImpact);

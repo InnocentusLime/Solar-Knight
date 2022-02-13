@@ -4,18 +4,32 @@ use bevy_rapier2d::prelude::*;
 use std::ops::AddAssign;
 use std::collections::HashMap;
 
+// TODO sparse set storage
 #[derive(Default, Component)]
 pub struct CollisionMarker;
 
-pub trait DamageInflictorComponent : Component + Copy {
+pub trait CollisionInflictorComponent : Component + Copy {
+    // tip: it's probably better to use sparse set storage
+    // method for the output component
     type Output : Default + Component + AddAssign;
 
-    fn compute_damage(&self) -> Self::Output;
+    fn compute_effect(&self) -> Self::Output;
+}
+
+/// A component to help filtering off the collisions between
+/// entities. 
+/// Note that in order to not create strange situations it is
+/// advised that the implementation of this trait is symmetric
+/// As in, `a.can_collide(b) == b.can_collide(a)`
+pub trait CollisionFilterComponent : Component + Copy {
+    fn can_collide(&self, other : &Self) -> bool;
 }
 
 // TODO take collisions into account too
-pub fn collision_daemon<Inflictor : DamageInflictorComponent>(
+pub fn collision_daemon<Inflictor : CollisionInflictorComponent, Filter : CollisionFilterComponent>(
     inflictor_entities : Query<(Entity, &Inflictor)>,
+    filters : Query<(Entity, &Filter)>,
+    mut filter_table : Local<HashMap<Entity, Filter>>,
     mut inflictors : Local<HashMap<Entity, (bool, Inflictor)>>,
     mut victims : Local<HashMap<Entity, Inflictor::Output>>,
     mut events : EventReader<IntersectionEvent>,
@@ -26,10 +40,16 @@ pub fn collision_daemon<Inflictor : DamageInflictorComponent>(
     inflictor_entities.iter()
     .for_each(|(entity, x)| { inflictors.insert(entity, (false, *x)); });
 
+    filter_table.clear();
+    filters.iter()
+    .for_each(|(entity, x)| { filter_table.insert(entity, *x); });
+
     for (body_a, body_b) in 
         events.iter()
         .map(|x| (x.collider1.entity(), x.collider2.entity())) 
     {
+        if !filter_table[&body_a].can_collide(&filter_table[&body_b]) { continue; }
+
         if let Some((collided, inflictor)) = inflictors.get_mut(&body_b)
         {
             if !*collided {
@@ -39,7 +59,7 @@ pub fn collision_daemon<Inflictor : DamageInflictorComponent>(
             }
 
             *victims.entry(body_a).or_insert(Inflictor::Output::default()) += 
-                inflictor.compute_damage()
+                inflictor.compute_effect()
             ;
         }
         
@@ -52,7 +72,7 @@ pub fn collision_daemon<Inflictor : DamageInflictorComponent>(
             }
 
             *victims.entry(body_b).or_insert(Inflictor::Output::default()) += 
-                inflictor.compute_damage()
+                inflictor.compute_effect()
             ;
         }
     }
@@ -63,23 +83,25 @@ pub fn collision_daemon<Inflictor : DamageInflictorComponent>(
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, SystemLabel)]
 pub struct CollisionDaemon;
 
-pub struct CollisionDaemonPlugin<Inflictor : DamageInflictorComponent>(std::marker::PhantomData<fn(&mut Inflictor)>);
+pub struct CollisionDaemonPlugin<Inflictor : CollisionInflictorComponent, Filter : CollisionFilterComponent>(std::marker::PhantomData<fn(&mut Inflictor, &Filter)>);
 
-impl<Inflictor> CollisionDaemonPlugin<Inflictor> 
+impl<Inflictor, Filter> CollisionDaemonPlugin<Inflictor, Filter> 
 where
-    Inflictor : DamageInflictorComponent
+    Inflictor : CollisionInflictorComponent,
+    Filter : CollisionFilterComponent,
 {
     pub fn new() -> Self { CollisionDaemonPlugin(std::marker::PhantomData) }
 }
 
-impl<Inflictor> Plugin for CollisionDaemonPlugin<Inflictor> 
+impl<Inflictor, Filter> Plugin for CollisionDaemonPlugin<Inflictor, Filter> 
 where
-    Inflictor : DamageInflictorComponent
+    Inflictor : CollisionInflictorComponent,
+    Filter : CollisionFilterComponent,
 {
     fn build(&self, app : &mut App) {
         app.add_system_to_stage(
             CoreStage::PostUpdate, 
-            collision_daemon::<Inflictor>
+            collision_daemon::<Inflictor, Filter>
             .label(CollisionDaemon)
         );
     }

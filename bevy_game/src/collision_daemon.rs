@@ -48,7 +48,10 @@ pub fn collision_daemon<Inflictor : CollisionInflictorComponent, Filter : Collis
         events.iter()
         .map(|x| (x.collider1.entity(), x.collider2.entity())) 
     {
-        if !filter_table[&body_a].can_collide(&filter_table[&body_b]) { continue; }
+        match (filter_table.get(&body_a), filter_table.get(&body_b)) {
+            (Some(filter_a), Some(filter_b)) if filter_a.can_collide(filter_b) => (),
+            _ => continue,
+        }
 
         if let Some((collided, inflictor)) = inflictors.get_mut(&body_b)
         {

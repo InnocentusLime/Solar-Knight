@@ -78,7 +78,8 @@ fn test_setup(
     );
  
     commands.spawn_player(&ship_reses);
-    commands.spawn_test_bullet(&bullet_reses, 0.5f32, 0.0f32, TeamComponent::Hive);
+    commands.spawn_test_bullet(&bullet_reses, 1f32, 0.0f32, 0.0f32, TeamComponent::Hive);
+    commands.spawn_test_bullet(&bullet_reses, -1f32, -0.8f32, -std::f32::consts::FRAC_PI_2, TeamComponent::Hive);
   
     commands.spawn()
     .insert(Name::new("Bottom wall"))

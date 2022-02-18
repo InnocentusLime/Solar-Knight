@@ -5,6 +5,7 @@ use bevy::ecs::system::EntityCommands;
 
 use crate::team::TeamComponent;
 use crate::mouse_pos::get_mouse_position;
+use crate::bullet::BulletCommands;
 use crate::ship::{ ShipCommands, ShipResources };
 
 #[derive(Component)]
@@ -36,6 +37,7 @@ fn player_controls(
     wnds : Res<Windows>,
     mouse_button_input : Res<Input<MouseButton>>,
     camera_query : Query<&Transform, With<Camera>>,
+//    mut commands : Commands,
     mut player_query : Query<(&mut RigidBodyPositionComponent, &mut RigidBodyForcesComponent), With<PlayerShipTag>>
 ) {
     const PLAYER_FORCE_MAGNITUDE : f32 = 10.0f32;

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
+use nalgebra::UnitComplex;
 use bevy_inspector_egui::Inspectable;
 use bevy::ecs::system::EntityCommands;
 
@@ -77,6 +78,20 @@ pub fn despawn_on_impact_system(
     }
 }
 
+#[derive(Clone, Copy, Debug, Inspectable, Component)]
+pub struct LinearDirectedFlightComponent {
+    pub speed : f32,
+}
+
+pub fn linear_directed_flight_system(
+    mut query : Query<(&mut RigidBodyVelocityComponent, &RigidBodyPositionComponent, &LinearDirectedFlightComponent)>,
+) {
+    for (mut vel, tf, flight) in query.iter_mut() {
+        let v = tf.position.rotation.transform_vector(&vector!(0.0f32, 1.0f32));
+        vel.linvel += flight.speed * v;
+    }
+}
+
 #[derive(Bundle)]
 struct BaseBulletBundle {
     name : Name,
@@ -98,6 +113,7 @@ pub trait BulletCommands<'w, 's> {
         &'a mut self,
         bullet_resources : &BulletResources,
         x : f32, y : f32,
+        ang : f32,
         team : TeamComponent,
     ) -> EntityCommands<'w, 's, 'a>;
 }
@@ -107,9 +123,11 @@ impl<'w, 's> BulletCommands<'w, 's> for Commands<'w, 's> {
         &'a mut self,
         bullet_resources : &BulletResources,
         x : f32, y : f32,
+        ang : f32,
         team : TeamComponent,
     ) -> EntityCommands<'w, 's, 'a> {
         let mut rigid_body = RigidBodyBundle::default();
+        rigid_body.position.position.rotation = UnitComplex::from_angle(ang);
         rigid_body.position.position.translation.vector = vector!(x, y);
         rigid_body.mass_properties.flags |= RigidBodyMassPropsFlags::ROTATION_LOCKED;
        
@@ -131,12 +149,14 @@ impl<'w, 's> BulletCommands<'w, 's> for Commands<'w, 's> {
                     },
                     ..Default::default()
                 },
-                collider_bundle : ColliderBundle {
-                    collider_type : ColliderType::Sensor.into(),
-                    shape : ColliderShape::cuboid(0.021f32, 0.043f32).into(),
-                    flags : ActiveEvents::INTERSECTION_EVENTS.into(),
-                    ..ColliderBundle::default()
-                },
+                collider_bundle : 
+                    ColliderBundle { 
+                        collider_type : ColliderType::Sensor.into(),
+                        shape : ColliderShape::cuboid(0.021f32, 0.043f32).into(),
+                        flags : ActiveEvents::INTERSECTION_EVENTS.into(),
+                        ..ColliderBundle::default()
+                    }
+                ,
                 rigid_body_bundle : rigid_body,
                 layer : LayerComponent {
                     layer : Layer::ShipLayer,
@@ -149,7 +169,10 @@ impl<'w, 's> BulletCommands<'w, 's> for Commands<'w, 's> {
         ;
         commands
         .insert(DespawnOnImpact)
-        .insert(LifetimeTimerComponent(Timer::from_seconds(3.0f32, false)));
+        .insert(LifetimeTimerComponent(Timer::from_seconds(3.0f32, false)))
+        .insert(LinearDirectedFlightComponent {
+            speed : 0.05f32,
+        });
 
         commands
     }
@@ -161,6 +184,7 @@ impl Plugin for BulletPlugin {
     fn build(&self, app : &mut App) {
         BulletResources::load_routine(&mut app.world);
         app
+        .add_system(linear_directed_flight_system)
         .add_system_to_stage(
             CoreStage::Last,
             timed_out_entity_system

@@ -24,7 +24,7 @@ fn init_logging() -> Result<(), Box<dyn StdError>> {
             println!("Initializing debug logging facade");
             CombinedLogger::init(
                 vec![
-                    TermLogger::new(LevelFilter::Trace, Config::default(), TerminalMode::Mixed),
+                    TermLogger::new(LevelFilter::Trace, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
                     WriteLogger::new(LevelFilter::Error, Config::default(), File::create("err.log")?),
                 ]
             )?
@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn StdError>> {
 
                         tick_time_acc -= tick_duration;
                     }
-                    
+
                     // Check if we need rendering
                     if eclapsed_frame >= frame_duration {
                         use std::mem::replace;
@@ -144,7 +144,7 @@ fn main() -> Result<(), Box<dyn StdError>> {
                     },
                     _ => (),
                 }
-                
+
                 input_tracker.process_event(&event);
                 transition_request = state.process_event(&mut ctx, &input_tracker, &event)
             }
